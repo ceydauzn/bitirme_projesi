@@ -288,7 +288,7 @@ class _StudentListScreenState extends State<StudentListScreen> {
                     ),
                 ],
               ),
-              // 👇 2. ADIM: TIKLANDIĞINDA DETAY SAYFASINA YÖNLENDİRME 👇
+              // 👇 HATAYI ÇÖZEN KISIM: YÖNLENDİRİRKEN userRole PARAMETRESİNİ EKLEDİK 👇
               onTap: () {
                 Navigator.push(
                   context,
@@ -296,11 +296,12 @@ class _StudentListScreenState extends State<StudentListScreen> {
                     builder: (context) => StudentDetailScreen(
                       studentId: studentNo,
                       studentName: name,
+                      userRole:
+                          'ogretmen', // Öğretmen ekranı olduğu için rolü atadık
                     ),
                   ),
                 );
               },
-              // 👆 YÖNLENDİRME BİTİŞİ 👆
             ),
           ),
         ),
