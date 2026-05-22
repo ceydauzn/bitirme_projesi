@@ -1,0 +1,40 @@
+{
+  "project_info": {
+    "project_number": "1048548279774",
+    "firebase_url": "https://okulsistemi-80243-default-rtdb.firebaseio.com",
+    "project_id": "okulsistemi-80243",
+    "storage_bucket": "okulsistemi-80243.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1048548279774:android:50ad6dbe7b1222e5a2c94f",
+        "android_client_info": {
+          "package_name": "com.example.bitirme_projesi"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "1048548279774-dl2tudrl3b6esjlte4bfml3bm6e9lskl.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAiYiGp9Shdn0JRXDWBj1Lq_TGzNRI_7eE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "1048548279774-dl2tudrl3b6esjlte4bfml3bm6e9lskl.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
