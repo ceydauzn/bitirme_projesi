@@ -4,26 +4,71 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 class StudentDetailScreen extends StatelessWidget {
   final String studentId;
   final String studentName;
+  final String userRole; // Beklenen değerler: 'ogretmen' veya 'veli'
 
   const StudentDetailScreen({
     super.key,
     required this.studentId,
     required this.studentName,
+    required this.userRole,
   });
 
-  // 👇 1. YAPAY ZEKA ÖNERİ SÖZLÜĞÜ (PEDAGOJİK BEYİN) 👇
-  final Map<String, String> duyguOnerileri = const {
-    'Stresli / Kaygılı':
-        'Öneri: Öğrenciye 5 dakikalık nefes egzersizi yaptırın veya konunun zorluk seviyesini anlık olarak düşürün.',
-    'Kızgın':
-        'Öneri: Öğrenciye kısa bir mola verdirin veya sakinleşmesi için bireysel çalışma süresi tanıyın.',
-    'Üzgün':
-        'Öneri: Göz teması kurarak destekleyici bir dil kullanın, ders sonu rehberlik için kısa bir görüşme planlayın.',
-    'Mutlu':
-        'Öneri: Harika! Öğrencinin bu ilgisini övgüyle destekleyin ve derse aktif katılımını sağlayın.',
-    'Nötr':
-        'Öneri: Dikkati ve motivasyonu artırmak için açık uçlu bir soru sorun veya görsel bir materyal gösterin.',
+  // 👇 1. KRONİK DURUMLAR İÇİN (3 GÜN VE ÜZERİ) YAPAY ZEKA ÖNERİ SÖZLÜĞÜ 👇
+  final Map<String, Map<String, String>> duyguOnerileri = const {
+    'Stresli / Kaygılı': {
+      'ogretmen':
+          'Kritik Öneri: Öğrenci 3 gündür yüksek stres altında. Konunun zorluk seviyesini düşürün ve rehberlik servisine yönlendirin.',
+      'veli':
+          'Kritik Öneri: Çocuğunuzda son günlerde kronikleşen bir stres gözlemleniyor. Evde akademik baskıyı tamamen azaltın ve okulla iletişime geçin.',
+    },
+    'Kızgın': {
+      'ogretmen':
+          'Kritik Öneri: Süregelen gerginlik durumu. Öğrenciye mola verdirin ve sınıf içi çatışmaları önlemek için bireysel alan tanıyın.',
+      'veli':
+          'Kritik Öneri: Çocuğunuzda birkaç gündür okulda süren bir gerginlik var. Bugün onunla yargılamadan, sakin bir konuşma yapmanız çok önemli.',
+    },
+    'Üzgün': {
+      'ogretmen':
+          'Kritik Öneri: Öğrencide uzun süreli moral bozukluğu mevcut. Derhal göz teması kurarak destekleyici bir dil kullanın, rehberlikle görüşün.',
+      'veli':
+          'Kritik Öneri: Çocuğunuzda devam eden bir üzüntü hali var. Birlikte sevdiği bir aktiviteyi yaparak duygu durumunu acilen desteklemelisiniz.',
+    },
+    'Mutlu': {
+      'ogretmen':
+          'Öneri: Harika! Öğrencinin bu ilgisini övgüyle destekleyin ve derse aktif katılımını sağlayın.',
+      'veli':
+          'Öneri: Çocuğunuz bugün okulda oldukça pozitif ve mutluydu. Bu motivasyonunu evde de takdir ederek pekiştirebilirsiniz.',
+    },
+    'Nötr': {
+      'ogretmen':
+          'Öneri: Dikkati ve motivasyonu artırmak için açık uçlu bir soru sorun veya görsel bir materyal gösterin.',
+      'veli':
+          'Öneri: Çocuğunuzun günü olağan seyrinde geçti. Gününün detaylarını konuşarak iletişiminizi güçlendirebilirsiniz.',
+    },
   };
+
+  // 👇 2. DİNAMİK KARAR MEKANİZMASI (3 GÜN KONTROLÜ BURADA YAPILIYOR) 👇
+  String _getDynamicRecommendation(
+    String status,
+    String role,
+    int negativeDays,
+  ) {
+    bool isNegativeEmotion =
+        status.contains('Stres') || status == 'Kızgın' || status == 'Üzgün';
+
+    // EĞER DUYGU NEGATİFSE VE 3 GÜNDEN AZ İSE: HAFİF UYARI VER
+    if (isNegativeEmotion && negativeDays < 3) {
+      if (role == 'ogretmen') {
+        return 'Öneri: Öğrencide anlık bir duygusal dalgalanma var. Kronik bir risk yok, lütfen derste yakından ilgilenin ve gözlemlemeye devam edin.';
+      } else {
+        return 'Öneri: Çocuğunuz okulda ufak bir duygusal dalgalanma yaşadı. Bugün onunla yakından ilgilenmeniz ve sohbet etmeniz faydalı olacaktır.';
+      }
+    }
+
+    // EĞER 3 GÜN VE ÜZERİYSE VEYA POZİTİF BİR DUYGUYSA: SÖZLÜKTEKİ AĞIR TAVSİYEYİ VER
+    return duyguOnerileri[status]?[role] ??
+        "Yapay zeka analiz için sınıf ortamından daha fazla veri bekliyor...";
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -73,6 +118,23 @@ class StudentDetailScreen extends StatelessWidget {
                     "Öğrenci No: $studentId",
                     style: const TextStyle(color: Colors.white70),
                   ),
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.white24,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      userRole == 'ogretmen'
+                          ? 'Öğretmen Paneli'
+                          : 'Veli Paneli',
+                      style: const TextStyle(color: Colors.white, fontSize: 12),
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -111,24 +173,17 @@ class StudentDetailScreen extends StatelessWidget {
                         );
                       }
 
-                      // Firebase'den gelen veriyi Map olarak alıyoruz
                       var data =
                           snapshot.data!.data() as Map<String, dynamic>? ?? {};
-
-                      // Python kodunun gönderdiği alanları okuyoruz
                       String currentStatus =
                           data['currentStatus'] ?? 'Bilinmiyor';
                       int negativeDayCount = data['negativeDayCount'] ?? 0;
-
-                      // Durumun stresli olup olmadığını kontrol ediyoruz
                       bool isStressed = currentStatus.toLowerCase().contains(
                         'stres',
                       );
 
-                      // 👇 2. BURAYI GÜNCELLEDİK: Artık alt alta iki kart dönecek 👇
                       return Column(
                         children: [
-                          // MEVCUT DURUM KARTI
                           Card(
                             elevation: 2,
                             shape: RoundedRectangleBorder(
@@ -185,9 +240,10 @@ class StudentDetailScreen extends StatelessWidget {
                                           style: TextStyle(
                                             fontSize: 20,
                                             fontWeight: FontWeight.bold,
-                                            color: isStressed
+                                            // 3 gün ve üzeri kırmızı, değilse turuncu/gri
+                                            color: negativeDayCount >= 3
                                                 ? Colors.red
-                                                : Colors.blueGrey,
+                                                : Colors.orange,
                                           ),
                                         ),
                                       ],
@@ -200,14 +256,26 @@ class StudentDetailScreen extends StatelessWidget {
 
                           const SizedBox(height: 15),
 
-                          // 👇 3. YENİ YAPAY ZEKA ÖNERİ KARTIMIZ 👇
                           Card(
-                            color: Colors.blueAccent.withOpacity(0.1),
+                            // 3 gün eşiği aşıldıysa kutuyu hafif kırmızımsı (uyarı) yapalım, yoksa mavi
+                            color:
+                                (negativeDayCount >= 3 &&
+                                    (currentStatus.contains('Stres') ||
+                                        currentStatus == 'Kızgın' ||
+                                        currentStatus == 'Üzgün'))
+                                ? Colors.redAccent.withOpacity(0.08)
+                                : Colors.blueAccent.withOpacity(0.1),
                             elevation: 0,
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(15),
                               side: BorderSide(
-                                color: Colors.blueAccent.withOpacity(0.3),
+                                color:
+                                    (negativeDayCount >= 3 &&
+                                        (currentStatus.contains('Stres') ||
+                                            currentStatus == 'Kızgın' ||
+                                            currentStatus == 'Üzgün'))
+                                    ? Colors.redAccent.withOpacity(0.3)
+                                    : Colors.blueAccent.withOpacity(0.3),
                                 width: 1,
                               ),
                             ),
@@ -216,27 +284,39 @@ class StudentDetailScreen extends StatelessWidget {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  const Row(
+                                  Row(
                                     children: [
                                       Icon(
-                                        Icons.lightbulb_outline,
-                                        color: Colors.blueAccent,
+                                        negativeDayCount >= 3
+                                            ? Icons.notification_important
+                                            : Icons.lightbulb_outline,
+                                        color: negativeDayCount >= 3
+                                            ? Colors.redAccent
+                                            : Colors.blueAccent,
                                       ),
-                                      SizedBox(width: 8),
+                                      const SizedBox(width: 8),
                                       Text(
-                                        "Yapay Zeka Karar Destek",
+                                        userRole == 'ogretmen'
+                                            ? "Öğretmen İçin Tavsiye"
+                                            : "Veli İçin Tavsiye",
                                         style: TextStyle(
                                           fontWeight: FontWeight.bold,
                                           fontSize: 16,
-                                          color: Colors.blueAccent,
+                                          color: negativeDayCount >= 3
+                                              ? Colors.redAccent
+                                              : Colors.blueAccent,
                                         ),
                                       ),
                                     ],
                                   ),
                                   const SizedBox(height: 12),
                                   Text(
-                                    duyguOnerileri[currentStatus] ??
-                                        "Yapay zeka analiz için sınıf ortamından daha fazla veri bekliyor...",
+                                    // 👇 BURAYA DİNAMİK FONKSİYONUMUZU ÇAĞIRIYORUZ 👇
+                                    _getDynamicRecommendation(
+                                      currentStatus,
+                                      userRole,
+                                      negativeDayCount,
+                                    ),
                                     style: const TextStyle(
                                       fontSize: 14,
                                       height: 1.4,
