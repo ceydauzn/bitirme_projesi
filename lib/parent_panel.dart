@@ -27,11 +27,11 @@ class _ParentPanelState extends State<ParentPanel> {
 
   Future<void> _loadParentData() async {
     User? currentUser = _auth.currentUser;
-    if (currentUser != null) {
+    if (currentUser != null && currentUser.email != null) {
       try {
         DocumentSnapshot doc = await _firestore
             .collection('users')
-            .doc(currentUser.uid)
+            .doc(currentUser.email)
             .get();
         if (doc.exists && mounted) {
           setState(() {
@@ -61,14 +61,22 @@ class _ParentPanelState extends State<ParentPanel> {
 
   Future<void> _respondToMeeting(String statusText) async {
     try {
-      String uid = _auth.currentUser!.uid;
-      await _firestore.collection('users').doc(uid).update({
+      String userEmail = _auth.currentUser!.email!;
+
+      // 1. Veritabanını Güncelle
+      await _firestore.collection('users').doc(userEmail).update({
         'hasPendingMeeting': false,
       });
 
+      // 👇 2. SİHİRLİ DOKUNUŞ: Ekranın anında tepki verip kartı silmesi için State'i güncelliyoruz 👇
+      setState(() {
+        _parentData!['hasPendingMeeting'] = false;
+      });
+
+      // 3. Beklemedeki randevuyu bul ve Onaylandı/Reddedildi yap (Rehberlik1 ve Rehberlik2 hepsi için ortak çalışır)
       QuerySnapshot meetingQuery = await _firestore
           .collection('meetings')
-          .where('parentId', isEqualTo: uid)
+          .where('parentId', isEqualTo: userEmail)
           .where('status', isEqualTo: 'Beklemede')
           .get();
 
@@ -78,17 +86,88 @@ class _ParentPanelState extends State<ParentPanel> {
         });
       }
 
+      // 4. Şık Cam Tasarımlı Bildirim Baloncuğu
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              statusText == 'Onaylandı'
-                  ? "Görüşme onaylandı, öğretmene iletildi."
-                  : "Görüşme reddedildi.",
+        bool isApproved = statusText == 'Onaylandı';
+        IconData iconData = isApproved
+            ? Icons.check_circle_outline_rounded
+            : Icons.cancel_outlined;
+        Color statusColor = isApproved
+            ? Colors.greenAccent
+            : Colors.orangeAccent;
+        String message = isApproved
+            ? "Görüşme başarıyla onaylandı ve öğretmene iletildi."
+            : "Görüşme reddedildi / ertelendi.";
+
+        showDialog(
+          context: context,
+          barrierColor: Colors.black.withOpacity(0.5),
+          builder: (context) => Dialog(
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(20),
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+                child: Container(
+                  padding: const EdgeInsets.all(25),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: Colors.white.withOpacity(0.2),
+                      width: 1.5,
+                    ),
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(15),
+                        decoration: BoxDecoration(
+                          color: statusColor.withOpacity(0.2),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(iconData, color: statusColor, size: 60),
+                      ),
+                      const SizedBox(height: 20),
+                      Text(
+                        message,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 25),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.white.withOpacity(0.2),
+                            elevation: 0,
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(15),
+                            ),
+                          ),
+                          onPressed: () => Navigator.pop(context),
+                          child: const Text(
+                            "Tamam",
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             ),
-            backgroundColor: statusText == 'Onaylandı'
-                ? Colors.green
-                : Colors.orange,
           ),
         );
       }
@@ -97,7 +176,6 @@ class _ParentPanelState extends State<ParentPanel> {
     }
   }
 
-  // ✅ YENİ: Mesaj gönderme dialogu
   void _showMessageDialog(String studentName) {
     final TextEditingController messageController = TextEditingController();
     showDialog(
@@ -117,7 +195,7 @@ class _ParentPanelState extends State<ParentPanel> {
             hintText: "Mesajınızı yazın...",
             hintStyle: const TextStyle(color: Colors.white54),
             filled: true,
-            fillColor: Colors.white.withValues(alpha: 0.1),
+            fillColor: Colors.white.withOpacity(0.1),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(15),
               borderSide: BorderSide.none,
@@ -140,7 +218,7 @@ class _ParentPanelState extends State<ParentPanel> {
               if (messageController.text.trim().isEmpty) return;
               try {
                 await _firestore.collection('messages').add({
-                  'fromParentId': _auth.currentUser!.uid,
+                  'fromParentEmail': _auth.currentUser!.email,
                   'fromParentName': _parentData?['name'] ?? 'Bilinmeyen Veli',
                   'studentName': studentName,
                   'studentId': _parentData?['studentId'] ?? '',
@@ -236,18 +314,12 @@ class _ParentPanelState extends State<ParentPanel> {
           Positioned(
             top: -50,
             right: -50,
-            child: _buildNeonCircle(
-              200,
-              Colors.tealAccent.withValues(alpha: 0.1),
-            ),
+            child: _buildNeonCircle(200, Colors.tealAccent.withOpacity(0.1)),
           ),
           Positioned(
             bottom: -80,
             left: -80,
-            child: _buildNeonCircle(
-              250,
-              Colors.blueAccent.withValues(alpha: 0.1),
-            ),
+            child: _buildNeonCircle(250, Colors.blueAccent.withOpacity(0.1)),
           ),
           SafeArea(
             child: SingleChildScrollView(
@@ -268,7 +340,7 @@ class _ParentPanelState extends State<ParentPanel> {
                   Text(
                     "Öğrencinizin güncel durum raporu aşağıdadır.",
                     style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.7),
+                      color: Colors.white.withOpacity(0.7),
                       fontSize: 14,
                     ),
                   ),
@@ -300,14 +372,17 @@ class _ParentPanelState extends State<ParentPanel> {
                       int negativeDays = studentData['negativeDayCount'] ?? 0;
                       bool isCritical = negativeDays >= 3;
 
-                      // ✅ Gerçek öğrenci adı
+                      // 👇 REVIZE KISIM: Kartın görünürlüğü artık gün sayısına değil öğretmenin talebine (hasPendingMeeting) bağlı 👇
+                      bool hasPending =
+                          _parentData?['hasPendingMeeting'] == true;
+
                       String studentName = studentData['name'] ?? 'Öğrenci';
 
                       return Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          if (isCritical) _buildMeetingAlertCard(studentData),
-                          if (isCritical) const SizedBox(height: 25),
+                          if (hasPending) _buildMeetingAlertCard(studentData),
+                          if (hasPending) const SizedBox(height: 25),
 
                           const Text(
                             "Öğrenci Durum Özeti",
@@ -318,7 +393,11 @@ class _ParentPanelState extends State<ParentPanel> {
                             ),
                           ),
                           const SizedBox(height: 15),
-                          _buildStudentStatusCard(studentData, isCritical),
+                          _buildStudentStatusCard(
+                            studentId,
+                            studentData,
+                            isCritical,
+                          ), // studentId parametresi eklendi
 
                           const SizedBox(height: 25),
 
@@ -333,7 +412,6 @@ class _ParentPanelState extends State<ParentPanel> {
                           const SizedBox(height: 15),
                           Row(
                             children: [
-                              // ✅ Mesaj butonu artık dialog açıyor
                               Expanded(
                                 child: _buildActionCard(
                                   Icons.chat_bubble_outline_rounded,
@@ -343,7 +421,6 @@ class _ParentPanelState extends State<ParentPanel> {
                                 ),
                               ),
                               const SizedBox(width: 15),
-                              // ✅ Analiz butonu artık gerçek öğrenci adını geçiyor
                               Expanded(
                                 child: _buildActionCard(
                                   Icons.insights_rounded,
@@ -382,10 +459,10 @@ class _ParentPanelState extends State<ParentPanel> {
         child: Container(
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
-            color: Colors.redAccent.withValues(alpha: 0.15),
+            color: Colors.redAccent.withOpacity(0.15),
             borderRadius: BorderRadius.circular(20),
             border: Border.all(
-              color: Colors.redAccent.withValues(alpha: 0.4),
+              color: Colors.redAccent.withOpacity(0.4),
               width: 1.5,
             ),
           ),
@@ -423,7 +500,7 @@ class _ParentPanelState extends State<ParentPanel> {
               Text(
                 "Yapay zeka analizlerimize göre öğrenciniz ${studentData["name"]} son ${studentData["negativeDayCount"]} gündür yoğun stres altındadır. Sınıf rehber öğretmeni sizinle bir görüşme planlamıştır.",
                 style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.85),
+                  color: Colors.white.withOpacity(0.85),
                   fontSize: 13,
                   height: 1.5,
                 ),
@@ -475,10 +552,18 @@ class _ParentPanelState extends State<ParentPanel> {
   }
 
   Widget _buildStudentStatusCard(
+    String studentId, // Dinamik sınıf hesaplaması için eklendi
     Map<String, dynamic> studentData,
     bool isCritical,
   ) {
     Color statusColor = isCritical ? Colors.redAccent : Colors.greenAccent;
+    String rawStatus = studentData["currentStatus"] ?? "Bilinmiyor";
+    String displayStatus = isCritical ? "Riskli" : rawStatus;
+
+    // 👇 REVIZE KISIM: Sınıf bilgisi 1 veya 2 ile başlamasına göre otomatik hesaplanıyor 👇
+    String calculatedClass = studentId.startsWith('1') ? '12-A' : '12-B';
+    String finalClass = studentData["class"] ?? calculatedClass;
+
     return ClipRRect(
       borderRadius: BorderRadius.circular(20),
       child: BackdropFilter(
@@ -486,15 +571,15 @@ class _ParentPanelState extends State<ParentPanel> {
         child: Container(
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.08),
+            color: Colors.white.withOpacity(0.08),
             borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
+            border: Border.all(color: Colors.white.withOpacity(0.15)),
           ),
           child: Row(
             children: [
               CircleAvatar(
                 radius: 35,
-                backgroundColor: statusColor.withValues(alpha: 0.2),
+                backgroundColor: statusColor.withOpacity(0.2),
                 child: Icon(Icons.person, color: statusColor, size: 40),
               ),
               const SizedBox(width: 20),
@@ -512,9 +597,9 @@ class _ParentPanelState extends State<ParentPanel> {
                     ),
                     const SizedBox(height: 5),
                     Text(
-                      "Sınıf: ${studentData["class"] ?? "-"}",
+                      "Sınıf: $finalClass", // 👈 Artık 12-A veya 12-B otomatik basılacak
                       style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.7),
+                        color: Colors.white.withOpacity(0.7),
                         fontSize: 14,
                       ),
                     ),
@@ -525,11 +610,11 @@ class _ParentPanelState extends State<ParentPanel> {
                         vertical: 5,
                       ),
                       decoration: BoxDecoration(
-                        color: statusColor.withValues(alpha: 0.2),
+                        color: statusColor.withOpacity(0.2),
                         borderRadius: BorderRadius.circular(10),
                       ),
                       child: Text(
-                        "Güncel Durum: ${studentData["currentStatus"] ?? "Bilinmiyor"}",
+                        "Güncel Durum: $displayStatus",
                         style: TextStyle(
                           color: statusColor,
                           fontSize: 12,
@@ -547,7 +632,6 @@ class _ParentPanelState extends State<ParentPanel> {
     );
   }
 
-  // ✅ onTap parametresi eklendi
   Widget _buildActionCard(
     IconData icon,
     String title,
@@ -563,16 +647,16 @@ class _ParentPanelState extends State<ParentPanel> {
           child: Container(
             padding: const EdgeInsets.symmetric(vertical: 25, horizontal: 10),
             decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.08),
+              color: Colors.white.withOpacity(0.08),
               borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+              border: Border.all(color: Colors.white.withOpacity(0.1)),
             ),
             child: Column(
               children: [
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: color.withValues(alpha: 0.15),
+                    color: color.withOpacity(0.15),
                     shape: BoxShape.circle,
                   ),
                   child: Icon(icon, color: color, size: 35),

@@ -46,11 +46,11 @@ class _LoginScreenState extends State<LoginScreen> {
 
       User? user = userCredential.user;
 
-      if (user != null) {
+      if (user != null && user.email != null) {
         // 2. Asenkron işlem: Firestore'dan veri çek
         DocumentSnapshot userDoc = await FirebaseFirestore.instance
             .collection('users')
-            .doc(user.uid)
+            .doc(user.email)
             .get();
 
         // --- KONTROL 2 ---
@@ -59,7 +59,18 @@ class _LoginScreenState extends State<LoginScreen> {
         if (userDoc.exists) {
           String dbRole = userDoc.get('role');
 
-          if (widget.roleCode != dbRole) {
+          // 👇 ASLA HATA VERMEYECEK AKILLI YETKİ KONTROLÜ 👇
+          bool yetkiVar = false;
+
+          if (widget.roleCode == 'veli' && dbRole == 'veli') {
+            yetkiVar = true;
+          } else if (widget.roleCode != 'veli' &&
+              (dbRole == 'rehberlik' || dbRole == 'ogretmen')) {
+            // Arayüzden ne gelirse gelsin, veritabanında rehberlik olan kişiyi içeri alıyoruz
+            yetkiVar = true;
+          }
+
+          if (!yetkiVar) {
             // 3. Asenkron işlem: Yetki yoksa çıkış yap
             await _auth.signOut();
 
@@ -67,17 +78,18 @@ class _LoginScreenState extends State<LoginScreen> {
             if (!mounted) return;
 
             setState(() {
-              _errorMessage = 'Hata: Bu panel için yetkiniz bulunmuyor!';
-              // isLoading false işlemini finally bloğu zaten yapıyor, buradan sildik.
+              _errorMessage =
+                  'Hata: Bu panel için yetkiniz bulunmuyor! (Sistem: ${widget.roleCode}, DB: $dbRole)';
             });
             return;
           }
 
-          if (widget.roleCode == 'rehberlik') {
+          // 👇 YÖNLENDİRME MANTIĞI 👇
+          if (dbRole == 'rehberlik' || dbRole == 'ogretmen') {
             Navigator.of(context).pushReplacement(
               MaterialPageRoute(builder: (context) => const TeacherPanel()),
             );
-          } else if (widget.roleCode == 'veli') {
+          } else if (dbRole == 'veli') {
             Navigator.of(context).pushReplacement(
               MaterialPageRoute(builder: (context) => const ParentPanel()),
             );
@@ -96,7 +108,6 @@ class _LoginScreenState extends State<LoginScreen> {
       }
     } on FirebaseAuthException catch (e) {
       // --- KONTROL 5 ---
-      // Hata yakalama bloğunda setState yapmadan önce kontrol
       if (!mounted) return;
 
       setState(() {
@@ -109,7 +120,6 @@ class _LoginScreenState extends State<LoginScreen> {
         }
       });
     } finally {
-      // Buradaki mounted kontrolün zaten çok doğruydu, koruduk.
       if (mounted) {
         setState(() {
           _isLoading = false;
@@ -218,7 +228,6 @@ class _LoginScreenState extends State<LoginScreen> {
                           isObscure: true,
                         ),
 
-                        // Sadece 'veli' panelinde göster
                         if (widget.roleCode == 'veli')
                           Padding(
                             padding: const EdgeInsets.only(top: 10),
@@ -228,11 +237,11 @@ class _LoginScreenState extends State<LoginScreen> {
                                 TextButton(
                                   onPressed: () {
                                     _emailController.text =
-                                        "ayse_veli@gmail.com";
+                                        "veli_ahmet@hotmail.com";
                                     _passwordController.text = "123456";
                                   },
                                   child: const Text(
-                                    "Ayşe'nin Velisi",
+                                    "Ahmet'in Velisi",
                                     style: TextStyle(
                                       color: Colors.amberAccent,
                                       fontWeight: FontWeight.bold,
@@ -242,11 +251,11 @@ class _LoginScreenState extends State<LoginScreen> {
                                 TextButton(
                                   onPressed: () {
                                     _emailController.text =
-                                        "ali_veli@gmail.com";
+                                        "veli_elif@hotmail.com";
                                     _passwordController.text = "123456";
                                   },
                                   child: const Text(
-                                    "Ali'nin Velisi",
+                                    "Elif'in Velisi",
                                     style: TextStyle(
                                       color: Colors.amberAccent,
                                       fontWeight: FontWeight.bold,

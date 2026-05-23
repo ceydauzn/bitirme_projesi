@@ -1,6 +1,7 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart'; // 👈 Auth kütüphanesi eklendi
 import 'student_detail_screen.dart'; // 👈 1. ADIM: Detay sayfasını içeri aktardık
 
 class StudentListScreen extends StatefulWidget {
@@ -16,11 +17,14 @@ class _StudentListScreenState extends State<StudentListScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // 👈 O an giriş yapmış olan Rehberlik Uzmanının E-postasını alıyoruz
+    final String? currentUserEmail = FirebaseAuth.instance.currentUser?.email;
+
     return Scaffold(
       extendBodyBehindAppBar: true, // Cam AppBar arkasından gradyan aksın
       appBar: AppBar(
         title: const Text(
-          "12-A Sınıf Listesi",
+          "Sınıf Listesi", // 👈 Sınıf Listesi olarak genelledik
           style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
         ),
         backgroundColor: Colors.transparent, // Şeffaf AppBar
@@ -65,7 +69,11 @@ class _StudentListScreenState extends State<StudentListScreen> {
           SafeArea(
             child: StreamBuilder<QuerySnapshot>(
               // VİZYON: Tüm students koleksiyonunu saniye saniye dinle
-              stream: _firestore.collection('students').snapshots(),
+              // 👈 DÜZELTME BURADA: Sadece giriş yapan uzmana ait öğrencileri getiriyoruz
+              stream: _firestore
+                  .collection('students')
+                  .where('counselorEmail', isEqualTo: currentUserEmail)
+                  .snapshots(),
               builder: (context, snapshot) {
                 // Veri yüklenirken dönecek çark
                 if (snapshot.connectionState == ConnectionState.waiting) {
@@ -88,7 +96,7 @@ class _StudentListScreenState extends State<StudentListScreen> {
                 if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
                   return const Center(
                     child: Text(
-                      "Sınıfta hiç öğrenci bulunamadı.\nLütfen Firebase'den öğrenci ekleyin.",
+                      "Size atanmış hiçbir öğrenci bulunamadı.", // 👈 Metni güncelledik
                       textAlign: TextAlign.center,
                       style: TextStyle(color: Colors.white70),
                     ),
@@ -208,10 +216,12 @@ class _StudentListScreenState extends State<StudentListScreen> {
     String name = student["name"] ?? "Bilinmeyen Öğrenci";
     String status = student["currentStatus"] ?? "Nötr";
 
-    // Renge karar verme
+    // 👈 DÜZELTME BURADA: 3 GÜN KURALI (Riskli Durum Override Ediliyor)
     if (negativeDays >= 3) {
       statusColor = Colors.redAccent;
       statusIcon = Icons.warning_rounded;
+      status =
+          "Riskli"; // O an nötr olsa bile 3 günü aştığı için "Riskli" yazar
     } else if (negativeDays > 0) {
       statusColor = Colors.orangeAccent;
       statusIcon = Icons.sentiment_dissatisfied_rounded;
@@ -297,7 +307,7 @@ class _StudentListScreenState extends State<StudentListScreen> {
                       studentId: studentNo,
                       studentName: name,
                       userRole:
-                          'ogretmen', // Öğretmen ekranı olduğu için rolü atadık
+                          'rehberlik', // Öğretmen ekranı olduğu için rolü atadık
                     ),
                   ),
                 );

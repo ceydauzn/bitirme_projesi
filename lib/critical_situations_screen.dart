@@ -13,17 +13,15 @@ class CriticalSituationsScreen extends StatefulWidget {
 class _CriticalSituationsScreenState extends State<CriticalSituationsScreen> {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  // Görüşme planla butonuna basıldığında çalışacak sihirli FİNAL fonksiyonu
+  // Görüşme planla butonuna basıldığında çalışacak fonksiyon
   Future<void> _scheduleMeeting(String studentId, String studentName) async {
     try {
-      // 1. Öğrencinin velisini 'users' koleksiyonunda bul
       QuerySnapshot parentQuery = await _firestore
           .collection('users')
           .where('studentId', isEqualTo: studentId)
           .get();
 
       if (parentQuery.docs.isNotEmpty) {
-        // Veliyi bulduk! Verilerini alalım.
         DocumentSnapshot parentDoc = parentQuery.docs.first;
         String parentUid = parentDoc.id;
         Map<String, dynamic> parentData =
@@ -32,49 +30,129 @@ class _CriticalSituationsScreenState extends State<CriticalSituationsScreen> {
             ? parentData['name']
             : "Bilinmeyen Veli";
 
-        // --- 1. SİHİR: Velinin telefonunda kırmızı alarmı çaldır ---
         await _firestore.collection('users').doc(parentUid).update({
           'hasPendingMeeting': true,
         });
 
-        // --- 2. SİHİR: Senin o efsane tasarımına (Takvime) randevuyu ekle! ---
+        // ✅ DİNAMİK SAAT: Bildirimin gönderildiği gerçek saat kullanılıyor
+        final now = DateTime.now();
+        final dynamicTime =
+            "${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}";
+        final dynamicDate =
+            "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
+
         await _firestore.collection('meetings').add({
           "student": studentName,
           "parent": parentName,
-          "date": "Bugün", // Demo amaçlı anında düşmesi için Bugün dedik
-          "time": "15:30",
+          "date": dynamicDate, // ✅ Dinamik tarih (YYYY-MM-DD)
+          "time": dynamicTime, // ✅ Dinamik saat (HH:mm)
+          "notifiedAt": now.toIso8601String(), // ✅ Bildirim gönderilme anı
+          "location": "Rehberlik Odası A-102",
           "status": "Beklemede",
-          "isCritical":
-              true, // Kritik ekrandan tetiklendiği için Acil etiketi alacak
+          "isCritical": true,
           "studentId": studentId,
           "parentId": parentUid,
-          "createdAt":
-              FieldValue.serverTimestamp(), // İleride tarihe göre sıralamak istersen diye
+          "createdAt": FieldValue.serverTimestamp(),
         });
 
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                "Randevu takvime eklendi ve veliye alarm gönderildi!",
-              ),
-              backgroundColor: Colors.green,
-            ),
+          _showGlassDialog(
+            icon: Icons.check_circle_outline_rounded,
+            iconColor: Colors.greenAccent,
+            message: "Evet, veliye bildirildi.",
           );
         }
       } else {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text("Bu öğrenciye kayıtlı bir veli bulunamadı!"),
-              backgroundColor: Colors.orange,
-            ),
+          _showGlassDialog(
+            icon: Icons.error_outline_rounded,
+            iconColor: Colors.orangeAccent,
+            message: "Bu öğrenciye kayıtlı bir veli bulunamadı!",
           );
         }
       }
     } catch (e) {
       debugPrint("Görüşme planlanırken hata: $e");
     }
+  }
+
+  // ✅ Tekrar eden glass dialog kodu tek metoda alındı
+  void _showGlassDialog({
+    required IconData icon,
+    required Color iconColor,
+    required String message,
+  }) {
+    showDialog(
+      context: context,
+      barrierColor: Colors.black.withOpacity(0.5),
+      builder: (context) => Dialog(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(20),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+            child: Container(
+              padding: const EdgeInsets.all(25),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: Colors.white.withOpacity(0.2),
+                  width: 1.5,
+                ),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(15),
+                    decoration: BoxDecoration(
+                      color: iconColor.withOpacity(0.2),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(icon, color: iconColor, size: 60),
+                  ),
+                  const SizedBox(height: 20),
+                  Text(
+                    message,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 25),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.white.withOpacity(0.2),
+                        elevation: 0,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(15),
+                        ),
+                      ),
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text(
+                        "Tamam",
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -92,7 +170,6 @@ class _CriticalSituationsScreenState extends State<CriticalSituationsScreen> {
       ),
       body: Stack(
         children: [
-          // 1. Ortak Derin Gradyan Arka Plan
           Container(
             decoration: const BoxDecoration(
               gradient: LinearGradient(
@@ -106,28 +183,18 @@ class _CriticalSituationsScreenState extends State<CriticalSituationsScreen> {
               ),
             ),
           ),
-
-          // 2. Alarm Hissiyatı Veren Neon Işıltılar (Kırmızı tonlarında)
           Positioned(
             top: 50,
             right: -50,
-            child: _buildNeonCircle(
-              200,
-              Colors.redAccent.withValues(alpha: 0.15),
-            ),
+            child: _buildNeonCircle(200, Colors.redAccent.withOpacity(0.15)),
           ),
           Positioned(
             bottom: -80,
             left: -50,
-            child: _buildNeonCircle(
-              250,
-              Colors.orangeAccent.withValues(alpha: 0.1),
-            ),
+            child: _buildNeonCircle(250, Colors.orangeAccent.withOpacity(0.1)),
           ),
-
           SafeArea(
             child: StreamBuilder<QuerySnapshot>(
-              // VİZYON: Sadece negativeDayCount >= 3 olan öğrencileri getir!
               stream: _firestore
                   .collection('students')
                   .where('negativeDayCount', isGreaterThanOrEqualTo: 3)
@@ -148,7 +215,6 @@ class _CriticalSituationsScreenState extends State<CriticalSituationsScreen> {
                   );
                 }
 
-                // Eğer riskli öğrenci yoksa öğretmene güzel haber ver
                 if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
                   return Center(
                     child: Column(
@@ -156,7 +222,7 @@ class _CriticalSituationsScreenState extends State<CriticalSituationsScreen> {
                       children: [
                         Icon(
                           Icons.check_circle_outline_rounded,
-                          color: Colors.greenAccent.withValues(alpha: 0.8),
+                          color: Colors.greenAccent.withOpacity(0.8),
                           size: 80,
                         ),
                         const SizedBox(height: 15),
@@ -175,14 +241,11 @@ class _CriticalSituationsScreenState extends State<CriticalSituationsScreen> {
                 return Column(
                   children: [
                     const SizedBox(height: 10),
-                    // Üst Bilgi Çubuğu
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 20.0),
                       child: _buildGlassInfoBar(criticalStudents.length),
                     ),
                     const SizedBox(height: 15),
-
-                    // Riskli Öğrenciler Listesi
                     Expanded(
                       child: ListView.builder(
                         padding: const EdgeInsets.symmetric(
@@ -220,9 +283,9 @@ class _CriticalSituationsScreenState extends State<CriticalSituationsScreen> {
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 20),
           decoration: BoxDecoration(
-            color: Colors.redAccent.withValues(alpha: 0.1),
+            color: Colors.redAccent.withOpacity(0.1),
             borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: Colors.redAccent.withValues(alpha: 0.3)),
+            border: Border.all(color: Colors.redAccent.withOpacity(0.3)),
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -263,7 +326,8 @@ class _CriticalSituationsScreenState extends State<CriticalSituationsScreen> {
   Widget _buildCriticalGlassCard(String studentId, Map<String, dynamic> data) {
     String name = data["name"] ?? "Bilinmeyen Öğrenci";
     int negativeDays = data["negativeDayCount"] ?? 3;
-    String status = data["currentStatus"] ?? "Stresli";
+    String rawStatus = data["currentStatus"] ?? "Bilinmiyor";
+    String displayStatus = negativeDays >= 3 ? "Riskli" : rawStatus;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 15),
@@ -274,10 +338,10 @@ class _CriticalSituationsScreenState extends State<CriticalSituationsScreen> {
           child: Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.1),
+              color: Colors.white.withOpacity(0.1),
               borderRadius: BorderRadius.circular(20),
               border: Border.all(
-                color: Colors.redAccent.withValues(alpha: 0.5),
+                color: Colors.redAccent.withOpacity(0.5),
                 width: 1.5,
               ),
             ),
@@ -289,7 +353,7 @@ class _CriticalSituationsScreenState extends State<CriticalSituationsScreen> {
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: Colors.redAccent.withValues(alpha: 0.2),
+                        color: Colors.redAccent.withOpacity(0.2),
                         shape: BoxShape.circle,
                       ),
                       child: const Icon(
@@ -313,7 +377,7 @@ class _CriticalSituationsScreenState extends State<CriticalSituationsScreen> {
                           ),
                           const SizedBox(height: 5),
                           Text(
-                            "$negativeDays Gündür $status",
+                            "$negativeDays Gündür $displayStatus",
                             style: const TextStyle(
                               color: Colors.orangeAccent,
                               fontSize: 14,
@@ -343,7 +407,7 @@ class _CriticalSituationsScreenState extends State<CriticalSituationsScreen> {
                       ),
                     ),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.white.withValues(alpha: 0.2),
+                      backgroundColor: Colors.white.withOpacity(0.2),
                       padding: const EdgeInsets.symmetric(vertical: 12),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(15),
