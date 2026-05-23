@@ -1,6 +1,6 @@
 import os
 import firebase_admin
-from firebase_admin import credentials, firestore
+from firebase_admin import credentials, firestore, auth
 
 # 1. FIREBASE BAĞLANTISI
 print("Firebase'e bağlanılıyor...")
@@ -10,29 +10,38 @@ if not firebase_admin._apps:
 db = firestore.client()
 print("Firebase bağlantısı başarılı! 🚀\n")
 
-print("Kullanıcılar (Öğretmenler ve Veliler) Firestore 'users' koleksiyonuna ekleniyor...\n")
+print("Tüm Kullanıcılar (Öğretmenler ve 20 Veli) Authentication ve Firestore'a Ekleniyor...\n")
+default_password = "123456"
 
-# 2. ÖĞRETMENLERİ (REHBERLİK UZMANLARINI) EKLE
+# 2. ÖĞRETMENLERİ EKLE
 teachers = {
     "ayse.yilmaz@okul.com": {"name": "Ayşe Yılmaz", "role": "ogretmen", "branch": "12-A"},
     "murat.demir@okul.com": {"name": "Murat Demir", "role": "ogretmen", "branch": "12-B"}
 }
 
 for email, info in teachers.items():
-    # E-posta adresini doküman ID'si olarak kullanıyoruz ki giriş yaparken bulması kolay olsun
+    try:
+        user = auth.create_user(
+            email=email,
+            password=default_password,
+            display_name=info['name']
+        )
+        print(f"Auth Kaydı Başarılı: {email}")
+    except auth.EmailAlreadyExistsError:
+        print(f"Uyarı: {email} zaten var, veritabanı güncellenecek.")
+
     db.collection('users').document(email).set({
         'name': info['name'],
         'email': email,
         'role': info['role'],
         'branch': info['branch']
     })
-    print(f"Yetkili Eklendi (Öğretmen): {info['name']} -> {email}")
 
 print("-" * 30)
 
-# 3. VELİLERİ EKLE (Öğrenci listesiyle aynı veriyi kullanarak eşleştirme yapıyoruz)
+# 3. TÜM 20 VELİYİ EKLE
 students_data = {
-    # 12-A Şubesi Velileri
+    # --- 12-A ŞUBESİ ---
     "101": {"studentName": "Ahmet Yılmaz", "parentName": "Mehmet Yılmaz", "parentEmail": "veli_ahmet@hotmail.com"},
     "102": {"studentName": "Elif Kaya", "parentName": "Ayşe Kaya", "parentEmail": "veli_elif@hotmail.com"},
     "103": {"studentName": "Can Demir", "parentName": "Mustafa Demir", "parentEmail": "veli_can@hotmail.com"},
@@ -44,7 +53,7 @@ students_data = {
     "109": {"studentName": "Melis Koç", "parentName": "Hatice Koç", "parentEmail": "veli_melis@hotmail.com"},
     "110": {"studentName": "Arda Yıldız", "parentName": "İbrahim Yıldız", "parentEmail": "veli_arda@hotmail.com"},
 
-    # 12-B Şubesi Velileri
+    # --- 12-B ŞUBESİ ---
     "201": {"studentName": "Mert Bulut", "parentName": "Osman Bulut", "parentEmail": "veli_mert@hotmail.com"},
     "202": {"studentName": "Aslı Güneş", "parentName": "Selma Güneş", "parentEmail": "veli_asli@hotmail.com"},
     "203": {"studentName": "Deniz Erdoğan", "parentName": "Murat Erdoğan", "parentEmail": "veli_deniz@hotmail.com"},
@@ -60,8 +69,16 @@ students_data = {
 for student_id, info in students_data.items():
     parent_email = info['parentEmail']
     
-    # Veliyi veritabanına eklerken 'studentId' bilgisini veriyoruz. 
-    # Giriş ekranında bu ID'yi okuyup veliyi sadece o öğrenciye yönlendireceğiz.
+    try:
+        user = auth.create_user(
+            email=parent_email,
+            password=default_password,
+            display_name=info['parentName']
+        )
+        print(f"Auth Kaydı Başarılı (Veli): {parent_email}")
+    except auth.EmailAlreadyExistsError:
+        print(f"Uyarı: {parent_email} zaten Auth panelinde var. Atlanıyor...")
+    
     db.collection('users').document(parent_email).set({
         'name': info['parentName'],
         'email': parent_email,
@@ -69,6 +86,5 @@ for student_id, info in students_data.items():
         'studentId': student_id, 
         'studentName': info['studentName']
     })
-    print(f"Yetkili Eklendi (Veli): {info['parentName']} -> {info['studentName']}'in velisi")
 
-print("\n🎉 Tebrikler! Tüm Veliler ve Öğretmenler, Rol Bazlı Erişim (RBAC) altyapısı için başarıyla kaydedildi!")
+print("\n🎉 İşlem Tamam! Eksik olan tüm veliler Auth ve Firestore'a eklendi!")
