@@ -60,14 +60,7 @@ class RoleSelectionScreen extends StatelessWidget {
                       Icons.psychology,
                       "rehberlik",
                     ),
-                    const SizedBox(height: 15),
-                    _buildRoleCard(
-                      context,
-                      "Sınıf Öğretmeni",
-                      "Sınıf geneli durum ve akademik notlar",
-                      Icons.co_present_rounded,
-                      "ogretmen",
-                    ),
+
                     const SizedBox(height: 15),
                     _buildRoleCard(
                       context,

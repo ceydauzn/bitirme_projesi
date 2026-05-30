@@ -63,17 +63,14 @@ class _ParentPanelState extends State<ParentPanel> {
     try {
       String userEmail = _auth.currentUser!.email!;
 
-      // 1. Veritabanını Güncelle
       await _firestore.collection('users').doc(userEmail).update({
         'hasPendingMeeting': false,
       });
 
-      // 👇 2. SİHİRLİ DOKUNUŞ: Ekranın anında tepki verip kartı silmesi için State'i güncelliyoruz 👇
       setState(() {
         _parentData!['hasPendingMeeting'] = false;
       });
 
-      // 3. Beklemedeki randevuyu bul ve Onaylandı/Reddedildi yap (Rehberlik1 ve Rehberlik2 hepsi için ortak çalışır)
       QuerySnapshot meetingQuery = await _firestore
           .collection('meetings')
           .where('parentId', isEqualTo: userEmail)
@@ -86,7 +83,6 @@ class _ParentPanelState extends State<ParentPanel> {
         });
       }
 
-      // 4. Şık Cam Tasarımlı Bildirim Baloncuğu
       if (mounted) {
         bool isApproved = statusText == 'Onaylandı';
         IconData iconData = isApproved
@@ -99,81 +95,326 @@ class _ParentPanelState extends State<ParentPanel> {
             ? "Görüşme başarıyla onaylandı ve öğretmene iletildi."
             : "Görüşme reddedildi / ertelendi.";
 
-        showDialog(
-          context: context,
-          barrierColor: Colors.black.withOpacity(0.5),
-          builder: (context) => Dialog(
-            backgroundColor: Colors.transparent,
-            elevation: 0,
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(20),
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
-                child: Container(
-                  padding: const EdgeInsets.all(25),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(
-                      color: Colors.white.withOpacity(0.2),
-                      width: 1.5,
-                    ),
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(15),
-                        decoration: BoxDecoration(
-                          color: statusColor.withOpacity(0.2),
-                          shape: BoxShape.circle,
-                        ),
-                        child: Icon(iconData, color: statusColor, size: 60),
-                      ),
-                      const SizedBox(height: 20),
-                      Text(
-                        message,
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 25),
-                      SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.white.withOpacity(0.2),
-                            elevation: 0,
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(15),
-                            ),
-                          ),
-                          onPressed: () => Navigator.pop(context),
-                          child: const Text(
-                            "Tamam",
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 16,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
+        _showGlassDialog(
+          icon: iconData,
+          iconColor: statusColor,
+          message: message,
         );
       }
     } catch (e) {
       debugPrint("Randevu cevaplanırken hata: $e");
     }
+  }
+
+  // ✅ YENİ: Görüşme detaylarını glass popup ile göster
+  void _showMeetingDetailPopup(Map<String, dynamic> meetingData) {
+    // ✅ Tarih formatını kullanıcı dostu hale getir
+    String rawDate = meetingData['date'] ?? '';
+    String formattedDate = _formatDate(rawDate);
+
+    // ✅ Gerçek bildirim saatini göster
+    String time = meetingData['time'] ?? '--:--';
+    String location = meetingData['location'] ?? 'Belirtilmemiş';
+    String status = meetingData['status'] ?? 'Beklemede';
+    String studentName = meetingData['student'] ?? 'Bilinmiyor';
+
+    // ✅ Bildirim zamanı (notifiedAt varsa)
+    String notifiedAtText = '';
+    if (meetingData['notifiedAt'] != null) {
+      try {
+        DateTime notifiedAt = DateTime.parse(meetingData['notifiedAt']);
+        notifiedAtText =
+            "${notifiedAt.day.toString().padLeft(2, '0')}.${notifiedAt.month.toString().padLeft(2, '0')}.${notifiedAt.year}  "
+            "${notifiedAt.hour.toString().padLeft(2, '0')}:${notifiedAt.minute.toString().padLeft(2, '0')}";
+      } catch (_) {}
+    }
+
+    Color statusColor;
+    IconData statusIcon;
+    switch (status) {
+      case 'Onaylandı':
+        statusColor = Colors.greenAccent;
+        statusIcon = Icons.check_circle_outline_rounded;
+        break;
+      case 'Reddedildi':
+        statusColor = Colors.orangeAccent;
+        statusIcon = Icons.cancel_outlined;
+        break;
+      default:
+        statusColor = Colors.amberAccent;
+        statusIcon = Icons.hourglass_top_rounded;
+    }
+
+    showDialog(
+      context: context,
+      barrierColor: Colors.black.withValues(alpha: 0.6),
+      builder: (context) => Dialog(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(24),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+            child: Container(
+              padding: const EdgeInsets.all(28),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(
+                  color: Colors.white.withValues(alpha: 0.2),
+                  width: 1.5,
+                ),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Başlık
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: Colors.blueAccent.withValues(alpha: 0.2),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.event_note_rounded,
+                          color: Colors.blueAccent,
+                          size: 28,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      const Expanded(
+                        child: Text(
+                          "Görüşme Detayı",
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+                  const Divider(color: Colors.white24, height: 1),
+                  const SizedBox(height: 20),
+
+                  // Öğrenci Adı
+                  _buildDetailRow(
+                    icon: Icons.person_outline_rounded,
+                    label: "Öğrenci",
+                    value: studentName,
+                    valueColor: Colors.white,
+                  ),
+                  const SizedBox(height: 14),
+
+                  // ✅ Dinamik Tarih
+                  _buildDetailRow(
+                    icon: Icons.calendar_today_rounded,
+                    label: "Tarih",
+                    value: formattedDate,
+                    valueColor: Colors.white,
+                  ),
+                  const SizedBox(height: 14),
+
+                  // ✅ Dinamik Saat (gerçek bildirim saati)
+                  _buildDetailRow(
+                    icon: Icons.access_time_rounded,
+                    label: "Saat",
+                    value: time,
+                    valueColor: Colors.cyanAccent,
+                  ),
+                  const SizedBox(height: 14),
+
+                  // Yer
+                  _buildDetailRow(
+                    icon: Icons.location_on_outlined,
+                    label: "Yer",
+                    value: location,
+                    valueColor: Colors.white,
+                  ),
+                  const SizedBox(height: 14),
+
+                  // Durum
+                  _buildDetailRow(
+                    icon: statusIcon,
+                    label: "Durum",
+                    value: status,
+                    valueColor: statusColor,
+                  ),
+
+                  // ✅ Bildirim zamanı varsa göster
+                  if (notifiedAtText.isNotEmpty) ...[
+                    const SizedBox(height: 14),
+                    _buildDetailRow(
+                      icon: Icons.notifications_active_outlined,
+                      label: "Bildirim Zamanı",
+                      value: notifiedAtText,
+                      valueColor: Colors.white70,
+                    ),
+                  ],
+
+                  const SizedBox(height: 24),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.white.withValues(alpha: 0.15),
+                        elevation: 0,
+                        padding: const EdgeInsets.symmetric(vertical: 13),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(15),
+                          side: BorderSide(
+                            color: Colors.white.withValues(alpha: 0.2),
+                          ),
+                        ),
+                      ),
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text(
+                        "Kapat",
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ✅ Detay satırı widget'ı
+  Widget _buildDetailRow({
+    required IconData icon,
+    required String label,
+    required String value,
+    required Color valueColor,
+  }) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, color: Colors.white54, size: 20),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: const TextStyle(color: Colors.white54, fontSize: 12),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                value,
+                style: TextStyle(
+                  color: valueColor,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ✅ YYYY-MM-DD → GG.AA.YYYY formatına çevir
+  String _formatDate(String raw) {
+    try {
+      final parts = raw.split('-');
+      if (parts.length == 3) {
+        return "${parts[2]}.${parts[1]}.${parts[0]}";
+      }
+    } catch (_) {}
+    return raw;
+  }
+
+  // ✅ Yeniden kullanılabilir glass dialog
+  void _showGlassDialog({
+    required IconData icon,
+    required Color iconColor,
+    required String message,
+  }) {
+    showDialog(
+      context: context,
+      barrierColor: Colors.black.withValues(alpha: 0.5),
+      builder: (context) => Dialog(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(20),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+            child: Container(
+              padding: const EdgeInsets.all(25),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: Colors.white.withValues(alpha: 0.2),
+                  width: 1.5,
+                ),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(15),
+                    decoration: BoxDecoration(
+                      color: iconColor.withValues(alpha: 0.2),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(icon, color: iconColor, size: 60),
+                  ),
+                  const SizedBox(height: 20),
+                  Text(
+                    message,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 25),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.white.withValues(alpha: 0.2),
+                        elevation: 0,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(15),
+                        ),
+                      ),
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text(
+                        "Tamam",
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   void _showMessageDialog(String studentName) {
@@ -195,7 +436,7 @@ class _ParentPanelState extends State<ParentPanel> {
             hintText: "Mesajınızı yazın...",
             hintStyle: const TextStyle(color: Colors.white54),
             filled: true,
-            fillColor: Colors.white.withOpacity(0.1),
+            fillColor: Colors.white.withValues(alpha: 0.1),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(15),
               borderSide: BorderSide.none,
@@ -278,6 +519,8 @@ class _ParentPanelState extends State<ParentPanel> {
     }
 
     String studentId = _parentData!['studentId'];
+    // ✅ Veliyi meetings sorgusunda tanımlamak için email kullan
+    String parentEmail = _auth.currentUser!.email!;
 
     return Scaffold(
       extendBodyBehindAppBar: true,
@@ -314,12 +557,18 @@ class _ParentPanelState extends State<ParentPanel> {
           Positioned(
             top: -50,
             right: -50,
-            child: _buildNeonCircle(200, Colors.tealAccent.withOpacity(0.1)),
+            child: _buildNeonCircle(
+              200,
+              Colors.tealAccent.withValues(alpha: 0.1),
+            ),
           ),
           Positioned(
             bottom: -80,
             left: -80,
-            child: _buildNeonCircle(250, Colors.blueAccent.withOpacity(0.1)),
+            child: _buildNeonCircle(
+              250,
+              Colors.blueAccent.withValues(alpha: 0.1),
+            ),
           ),
           SafeArea(
             child: SingleChildScrollView(
@@ -340,7 +589,7 @@ class _ParentPanelState extends State<ParentPanel> {
                   Text(
                     "Öğrencinizin güncel durum raporu aşağıdadır.",
                     style: TextStyle(
-                      color: Colors.white.withOpacity(0.7),
+                      color: Colors.white.withValues(alpha: 0.7),
                       fontSize: 14,
                     ),
                   ),
@@ -372,16 +621,16 @@ class _ParentPanelState extends State<ParentPanel> {
                       int negativeDays = studentData['negativeDayCount'] ?? 0;
                       bool isCritical = negativeDays >= 3;
 
-                      // 👇 REVIZE KISIM: Kartın görünürlüğü artık gün sayısına değil öğretmenin talebine (hasPendingMeeting) bağlı 👇
                       bool hasPending =
                           _parentData?['hasPendingMeeting'] == true;
-
                       String studentName = studentData['name'] ?? 'Öğrenci';
 
                       return Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          if (hasPending) _buildMeetingAlertCard(studentData),
+                          // ✅ Toplantı kartı artık meetings'ten gerçek veriyi çekiyor
+                          if (hasPending)
+                            _buildMeetingAlertCard(studentData, parentEmail),
                           if (hasPending) const SizedBox(height: 25),
 
                           const Text(
@@ -397,7 +646,7 @@ class _ParentPanelState extends State<ParentPanel> {
                             studentId,
                             studentData,
                             isCritical,
-                          ), // studentId parametresi eklendi
+                          ),
 
                           const SizedBox(height: 25),
 
@@ -451,108 +700,272 @@ class _ParentPanelState extends State<ParentPanel> {
     );
   }
 
-  Widget _buildMeetingAlertCard(Map<String, dynamic> studentData) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(20),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-        child: Container(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: Colors.redAccent.withOpacity(0.15),
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: Colors.redAccent.withOpacity(0.4),
-              width: 1.5,
-            ),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: Colors.redAccent,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: const Icon(
-                      Icons.notification_important_rounded,
-                      color: Colors.white,
-                      size: 24,
-                    ),
-                  ),
-                  const SizedBox(width: 15),
-                  const Expanded(
-                    child: Text(
-                      "Rehberlik Görüşme Talebi",
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 15),
-              Text(
-                "Yapay zeka analizlerimize göre öğrenciniz ${studentData["name"]} son ${studentData["negativeDayCount"]} gündür yoğun stres altındadır. Sınıf rehber öğretmeni sizinle bir görüşme planlamıştır.",
-                style: TextStyle(
-                  color: Colors.white.withOpacity(0.85),
-                  fontSize: 13,
-                  height: 1.5,
+  // ✅ Butona basınca Firestore'dan toplantı verisini çekip popup aç
+  Future<void> _fetchAndShowMeetingDetail(String parentEmail) async {
+    try {
+      // orderBy olmadan, sadece where ile sorgula → composite index gerekmez
+      final QuerySnapshot snap = await _firestore
+          .collection('meetings')
+          .where('parentId', isEqualTo: parentEmail)
+          .get();
+
+      if (snap.docs.isEmpty) {
+        if (mounted) {
+          _showGlassDialog(
+            icon: Icons.info_outline_rounded,
+            iconColor: Colors.orangeAccent,
+            message: "Henüz görüşme kaydı bulunamadı.",
+          );
+        }
+        return;
+      }
+
+      // En son oluşturulanı client-side sırala
+      final docs = snap.docs.toList();
+      docs.sort((a, b) {
+        final aTs = (a.data() as Map)['createdAt'];
+        final bTs = (b.data() as Map)['createdAt'];
+        if (aTs == null || bTs == null) return 0;
+        return (bTs as dynamic).compareTo(aTs as dynamic);
+      });
+
+      final meetingData = docs.first.data() as Map<String, dynamic>;
+      if (mounted) _showMeetingDetailPopup(meetingData);
+    } catch (e) {
+      debugPrint("Görüşme detayı çekilirken hata: $e");
+      if (mounted) {
+        _showGlassDialog(
+          icon: Icons.error_outline_rounded,
+          iconColor: Colors.redAccent,
+          message: "Görüşme bilgisi yüklenemedi. Lütfen tekrar deneyin.",
+        );
+      }
+    }
+  }
+
+  Widget _buildMeetingAlertCard(
+    Map<String, dynamic> studentData,
+    String parentEmail,
+  ) {
+    // Kart içindeki tarih/saat/yer için hafif bir FutureBuilder kullan
+    // orderBy YOK → composite index sorunu yok
+    return FutureBuilder<QuerySnapshot>(
+      future: _firestore
+          .collection('meetings')
+          .where('parentId', isEqualTo: parentEmail)
+          .get(),
+      builder: (context, meetingSnapshot) {
+        Map<String, dynamic>? meetingData;
+
+        if (meetingSnapshot.hasData && meetingSnapshot.data!.docs.isNotEmpty) {
+          // En son kaydı client-side bul
+          final docs = meetingSnapshot.data!.docs.toList();
+          docs.sort((a, b) {
+            final aTs = (a.data() as Map)['createdAt'];
+            final bTs = (b.data() as Map)['createdAt'];
+            if (aTs == null || bTs == null) return 0;
+            return (bTs as dynamic).compareTo(aTs as dynamic);
+          });
+          meetingData = docs.first.data() as Map<String, dynamic>;
+        }
+
+        String displayDate = meetingData != null
+            ? _formatDate(meetingData['date'] ?? '')
+            : '--.--.----';
+        String displayTime = meetingData?['time'] ?? '--:--';
+        String displayLocation = meetingData?['location'] ?? 'Rehberlik Odası';
+
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(20),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+            child: Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: Colors.redAccent.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: Colors.redAccent.withValues(alpha: 0.4),
+                  width: 1.5,
                 ),
               ),
-              const SizedBox(height: 15),
-              Row(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: () => _respondToMeeting('Onaylandı'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.greenAccent.shade700,
-                        shape: RoundedRectangleBorder(
+                  // Başlık
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.redAccent,
                           borderRadius: BorderRadius.circular(10),
                         ),
-                      ),
-                      child: const Text(
-                        "ONAYLA",
-                        style: TextStyle(
+                        child: const Icon(
+                          Icons.notification_important_rounded,
                           color: Colors.white,
+                          size: 24,
+                        ),
+                      ),
+                      const SizedBox(width: 15),
+                      const Expanded(
+                        child: Text(
+                          "Rehberlik Görüşme Talebi",
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 15),
+
+                  // Açıklama
+                  Text(
+                    "Yapay zeka analizlerimize göre öğrenciniz ${studentData["name"]} son ${studentData["negativeDayCount"]} gündür yoğun stres altındadır. Sınıf rehber öğretmeni sizinle bir görüşme planlamıştır.",
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.85),
+                      fontSize: 13,
+                      height: 1.5,
+                    ),
+                  ),
+                  const SizedBox(height: 15),
+
+                  // ✅ Tarih / Saat / Yer bilgi satırları
+                  _buildMiniInfoRow(
+                    Icons.calendar_today_rounded,
+                    "Tarih",
+                    displayDate,
+                  ),
+                  const SizedBox(height: 6),
+                  _buildMiniInfoRow(
+                    Icons.access_time_rounded,
+                    "Saat",
+                    displayTime,
+                    valueColor: Colors.cyanAccent,
+                  ),
+                  const SizedBox(height: 6),
+                  _buildMiniInfoRow(
+                    Icons.location_on_outlined,
+                    "Yer",
+                    displayLocation,
+                  ),
+                  const SizedBox(height: 15),
+
+                  // Butonlar
+                  Row(
+                    children: [
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: () => _respondToMeeting('Onaylandı'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.greenAccent.shade700,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                          ),
+                          child: const Text(
+                            "ONAYLA",
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () => _respondToMeeting('Reddedildi'),
+                          style: OutlinedButton.styleFrom(
+                            side: const BorderSide(color: Colors.white70),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                          ),
+                          child: const Text(
+                            "REDDET / ERTELE",
+                            style: TextStyle(
+                              color: Colors.white70,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+
+                  // ✅ Görüşme Detayı Butonu — her zaman tıklanabilir
+                  SizedBox(
+                    width: double.infinity,
+                    child: TextButton.icon(
+                      // Tıklanınca Firestore'dan veri çek → popup aç
+                      onPressed: () => _fetchAndShowMeetingDetail(parentEmail),
+                      icon: const Icon(
+                        Icons.info_outline_rounded,
+                        color: Colors.white70,
+                        size: 18,
+                      ),
+                      label: const Text(
+                        "Görüşme Detayı",
+                        style: TextStyle(
+                          color: Colors.white70,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () => _respondToMeeting('Reddedildi'),
-                      style: OutlinedButton.styleFrom(
-                        side: const BorderSide(color: Colors.white70),
+                      style: TextButton.styleFrom(
+                        backgroundColor: Colors.white.withValues(alpha: 0.08),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(10),
+                          side: BorderSide(
+                            color: Colors.white.withValues(alpha: 0.2),
+                          ),
                         ),
-                      ),
-                      child: const Text(
-                        "REDDET / ERTELE",
-                        style: TextStyle(color: Colors.white70, fontSize: 12),
+                        padding: const EdgeInsets.symmetric(vertical: 10),
                       ),
                     ),
                   ),
                 ],
               ),
-            ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  // ✅ Kart içi küçük bilgi satırı
+  Widget _buildMiniInfoRow(
+    IconData icon,
+    String label,
+    String value, {
+    Color valueColor = Colors.white,
+  }) {
+    return Row(
+      children: [
+        Icon(icon, color: Colors.white54, size: 16),
+        const SizedBox(width: 8),
+        Text(
+          "$label: ",
+          style: const TextStyle(color: Colors.white54, fontSize: 12),
+        ),
+        Text(
+          value,
+          style: TextStyle(
+            color: valueColor,
+            fontSize: 13,
+            fontWeight: FontWeight.bold,
           ),
         ),
-      ),
+      ],
     );
   }
 
   Widget _buildStudentStatusCard(
-    String studentId, // Dinamik sınıf hesaplaması için eklendi
+    String studentId,
     Map<String, dynamic> studentData,
     bool isCritical,
   ) {
@@ -560,7 +973,6 @@ class _ParentPanelState extends State<ParentPanel> {
     String rawStatus = studentData["currentStatus"] ?? "Bilinmiyor";
     String displayStatus = isCritical ? "Riskli" : rawStatus;
 
-    // 👇 REVIZE KISIM: Sınıf bilgisi 1 veya 2 ile başlamasına göre otomatik hesaplanıyor 👇
     String calculatedClass = studentId.startsWith('1') ? '12-A' : '12-B';
     String finalClass = studentData["class"] ?? calculatedClass;
 
@@ -571,15 +983,15 @@ class _ParentPanelState extends State<ParentPanel> {
         child: Container(
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.08),
+            color: Colors.white.withValues(alpha: 0.08),
             borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: Colors.white.withOpacity(0.15)),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
           ),
           child: Row(
             children: [
               CircleAvatar(
                 radius: 35,
-                backgroundColor: statusColor.withOpacity(0.2),
+                backgroundColor: statusColor.withValues(alpha: 0.2),
                 child: Icon(Icons.person, color: statusColor, size: 40),
               ),
               const SizedBox(width: 20),
@@ -597,9 +1009,9 @@ class _ParentPanelState extends State<ParentPanel> {
                     ),
                     const SizedBox(height: 5),
                     Text(
-                      "Sınıf: $finalClass", // 👈 Artık 12-A veya 12-B otomatik basılacak
+                      "Sınıf: $finalClass",
                       style: TextStyle(
-                        color: Colors.white.withOpacity(0.7),
+                        color: Colors.white.withValues(alpha: 0.7),
                         fontSize: 14,
                       ),
                     ),
@@ -610,7 +1022,7 @@ class _ParentPanelState extends State<ParentPanel> {
                         vertical: 5,
                       ),
                       decoration: BoxDecoration(
-                        color: statusColor.withOpacity(0.2),
+                        color: statusColor.withValues(alpha: 0.2),
                         borderRadius: BorderRadius.circular(10),
                       ),
                       child: Text(
@@ -647,16 +1059,16 @@ class _ParentPanelState extends State<ParentPanel> {
           child: Container(
             padding: const EdgeInsets.symmetric(vertical: 25, horizontal: 10),
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.08),
+              color: Colors.white.withValues(alpha: 0.08),
               borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: Colors.white.withOpacity(0.1)),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
             ),
             child: Column(
               children: [
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: color.withOpacity(0.15),
+                    color: color.withValues(alpha: 0.15),
                     shape: BoxShape.circle,
                   ),
                   child: Icon(icon, color: color, size: 35),

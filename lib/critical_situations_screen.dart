@@ -84,7 +84,7 @@ class _CriticalSituationsScreenState extends State<CriticalSituationsScreen> {
   }) {
     showDialog(
       context: context,
-      barrierColor: Colors.black.withOpacity(0.5),
+      barrierColor: Colors.black.withValues(alpha: 0.5),
       builder: (context) => Dialog(
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -95,10 +95,10 @@ class _CriticalSituationsScreenState extends State<CriticalSituationsScreen> {
             child: Container(
               padding: const EdgeInsets.all(25),
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.1),
+                color: Colors.white.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(20),
                 border: Border.all(
-                  color: Colors.white.withOpacity(0.2),
+                  color: Colors.white.withValues(alpha: 0.2),
                   width: 1.5,
                 ),
               ),
@@ -108,7 +108,7 @@ class _CriticalSituationsScreenState extends State<CriticalSituationsScreen> {
                   Container(
                     padding: const EdgeInsets.all(15),
                     decoration: BoxDecoration(
-                      color: iconColor.withOpacity(0.2),
+                      color: iconColor.withValues(alpha: 0.2),
                       shape: BoxShape.circle,
                     ),
                     child: Icon(icon, color: iconColor, size: 60),
@@ -128,7 +128,7 @@ class _CriticalSituationsScreenState extends State<CriticalSituationsScreen> {
                     width: double.infinity,
                     child: ElevatedButton(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.white.withOpacity(0.2),
+                        backgroundColor: Colors.white.withValues(alpha: 0.2),
                         elevation: 0,
                         padding: const EdgeInsets.symmetric(vertical: 12),
                         shape: RoundedRectangleBorder(
@@ -186,12 +186,18 @@ class _CriticalSituationsScreenState extends State<CriticalSituationsScreen> {
           Positioned(
             top: 50,
             right: -50,
-            child: _buildNeonCircle(200, Colors.redAccent.withOpacity(0.15)),
+            child: _buildNeonCircle(
+              200,
+              Colors.redAccent.withValues(alpha: 0.15),
+            ),
           ),
           Positioned(
             bottom: -80,
             left: -50,
-            child: _buildNeonCircle(250, Colors.orangeAccent.withOpacity(0.1)),
+            child: _buildNeonCircle(
+              250,
+              Colors.orangeAccent.withValues(alpha: 0.1),
+            ),
           ),
           SafeArea(
             child: StreamBuilder<QuerySnapshot>(
@@ -222,7 +228,7 @@ class _CriticalSituationsScreenState extends State<CriticalSituationsScreen> {
                       children: [
                         Icon(
                           Icons.check_circle_outline_rounded,
-                          color: Colors.greenAccent.withOpacity(0.8),
+                          color: Colors.greenAccent.withValues(alpha: 0.8),
                           size: 80,
                         ),
                         const SizedBox(height: 15),
@@ -283,9 +289,9 @@ class _CriticalSituationsScreenState extends State<CriticalSituationsScreen> {
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 20),
           decoration: BoxDecoration(
-            color: Colors.redAccent.withOpacity(0.1),
+            color: Colors.redAccent.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: Colors.redAccent.withOpacity(0.3)),
+            border: Border.all(color: Colors.redAccent.withValues(alpha: 0.3)),
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -338,10 +344,10 @@ class _CriticalSituationsScreenState extends State<CriticalSituationsScreen> {
           child: Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.1),
+              color: Colors.white.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(20),
               border: Border.all(
-                color: Colors.redAccent.withOpacity(0.5),
+                color: Colors.redAccent.withValues(alpha: 0.5),
                 width: 1.5,
               ),
             ),
@@ -353,7 +359,7 @@ class _CriticalSituationsScreenState extends State<CriticalSituationsScreen> {
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: Colors.redAccent.withOpacity(0.2),
+                        color: Colors.redAccent.withValues(alpha: 0.2),
                         shape: BoxShape.circle,
                       ),
                       child: const Icon(
@@ -407,7 +413,7 @@ class _CriticalSituationsScreenState extends State<CriticalSituationsScreen> {
                       ),
                     ),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.white.withOpacity(0.2),
+                      backgroundColor: Colors.white.withValues(alpha: 0.2),
                       padding: const EdgeInsets.symmetric(vertical: 12),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(15),

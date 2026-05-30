@@ -53,7 +53,6 @@ class _LoginScreenState extends State<LoginScreen> {
             .doc(user.email)
             .get();
 
-        // --- KONTROL 2 ---
         if (!mounted) return;
 
         if (userDoc.exists) {
@@ -74,7 +73,6 @@ class _LoginScreenState extends State<LoginScreen> {
             // 3. Asenkron işlem: Yetki yoksa çıkış yap
             await _auth.signOut();
 
-            // --- KONTROL 3 ---
             if (!mounted) return;
 
             setState(() {
@@ -98,7 +96,6 @@ class _LoginScreenState extends State<LoginScreen> {
           // 4. Asenkron işlem: Veritabanında rol yoksa çıkış yap
           await _auth.signOut();
 
-          // --- KONTROL 4 ---
           if (!mounted) return;
 
           setState(() {
@@ -107,7 +104,6 @@ class _LoginScreenState extends State<LoginScreen> {
         }
       }
     } on FirebaseAuthException catch (e) {
-      // --- KONTROL 5 ---
       if (!mounted) return;
 
       setState(() {
@@ -227,8 +223,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           Icons.lock_outline,
                           isObscure: true,
                         ),
-
-                        if (widget.roleCode == 'veli')
+                        if (widget.roleCode == 'rehberlik')
                           Padding(
                             padding: const EdgeInsets.only(top: 10),
                             child: Row(
@@ -237,11 +232,12 @@ class _LoginScreenState extends State<LoginScreen> {
                                 TextButton(
                                   onPressed: () {
                                     _emailController.text =
-                                        "veli_ahmet@hotmail.com";
+                                        "rehberlik1@gmail.com";
                                     _passwordController.text = "123456";
                                   },
                                   child: const Text(
-                                    "Ahmet'in Velisi",
+                                    "Rehberlik 1\n(12-A)",
+                                    textAlign: TextAlign.center,
                                     style: TextStyle(
                                       color: Colors.amberAccent,
                                       fontWeight: FontWeight.bold,
@@ -251,11 +247,12 @@ class _LoginScreenState extends State<LoginScreen> {
                                 TextButton(
                                   onPressed: () {
                                     _emailController.text =
-                                        "veli_elif@hotmail.com";
+                                        "rehberlik2@gmail.com";
                                     _passwordController.text = "123456";
                                   },
                                   child: const Text(
-                                    "Elif'in Velisi",
+                                    "Rehberlik 2\n(12-B)",
+                                    textAlign: TextAlign.center,
                                     style: TextStyle(
                                       color: Colors.amberAccent,
                                       fontWeight: FontWeight.bold,

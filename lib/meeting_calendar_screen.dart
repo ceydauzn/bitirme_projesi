@@ -10,8 +10,279 @@ class MeetingCalendarScreen extends StatefulWidget {
 }
 
 class _MeetingCalendarScreenState extends State<MeetingCalendarScreen> {
-  // Firebase Firestore bağlantısı
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+
+  // ✅ Görüşme Detayı Glass Popup
+  void _showMeetingDetailPopup(Map<String, dynamic> meeting) {
+    String date = meeting["date"] ?? "Belirtilmemiş";
+    String time = meeting["time"] ?? "--:--";
+    String location = meeting["location"] ?? "Rehberlik Odası A-102";
+    String studentName = meeting["student"] ?? "Bilinmiyor";
+    String parentName = meeting["parent"] ?? "Bilinmiyor";
+    String status = meeting["status"] ?? "Beklemede";
+    bool isCritical = meeting["isCritical"] ?? false;
+
+    // Tarih formatla: 2026-05-23 → 23.05.2026
+    String formattedDate = _formatDate(date);
+
+    // Bildirim zamanı
+    String notifiedAtText = '';
+    if (meeting['notifiedAt'] != null) {
+      try {
+        DateTime dt = DateTime.parse(meeting['notifiedAt']);
+        notifiedAtText =
+            "${dt.day.toString().padLeft(2, '0')}.${dt.month.toString().padLeft(2, '0')}.${dt.year}  "
+            "${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}";
+      } catch (_) {}
+    }
+
+    Color statusColor = _getStatusColor(status);
+    IconData statusIcon;
+    if (status == 'Onaylandı') {
+      statusIcon = Icons.check_circle_outline_rounded;
+    } else if (status == 'Reddedildi') {
+      statusIcon = Icons.cancel_outlined;
+    } else {
+      statusIcon = Icons.hourglass_top_rounded;
+    }
+
+    showDialog(
+      context: context,
+      barrierColor: Colors.black.withValues(alpha: 0.65),
+      builder: (context) => Dialog(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(24),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+            child: Container(
+              padding: const EdgeInsets.all(28),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(
+                  color: isCritical
+                      ? Colors.redAccent.withValues(alpha: 0.4)
+                      : Colors.white.withValues(alpha: 0.2),
+                  width: 1.5,
+                ),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Başlık
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: isCritical
+                              ? Colors.redAccent.withValues(alpha: 0.2)
+                              : Colors.blueAccent.withValues(alpha: 0.2),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          Icons.event_note_rounded,
+                          color: isCritical
+                              ? Colors.redAccent
+                              : Colors.blueAccent,
+                          size: 26,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              "Görüşme Detayı",
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            if (isCritical)
+                              Container(
+                                margin: const EdgeInsets.only(top: 4),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.redAccent.withValues(
+                                    alpha: 0.2,
+                                  ),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: const Text(
+                                  "Acil Görüşme",
+                                  style: TextStyle(
+                                    color: Colors.redAccent,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 20),
+                  const Divider(color: Colors.white24, height: 1),
+                  const SizedBox(height: 20),
+
+                  // Öğrenci
+                  _buildDetailRow(
+                    icon: Icons.school_outlined,
+                    label: "Öğrenci",
+                    value: studentName,
+                    valueColor: Colors.white,
+                  ),
+                  const SizedBox(height: 14),
+
+                  // Veli
+                  _buildDetailRow(
+                    icon: Icons.people_outline_rounded,
+                    label: "Veli",
+                    value: parentName,
+                    valueColor: Colors.white,
+                  ),
+                  const SizedBox(height: 14),
+
+                  // Tarih
+                  _buildDetailRow(
+                    icon: Icons.calendar_today_rounded,
+                    label: "Tarih",
+                    value: formattedDate,
+                    valueColor: Colors.white,
+                  ),
+                  const SizedBox(height: 14),
+
+                  // Saat
+                  _buildDetailRow(
+                    icon: Icons.access_time_rounded,
+                    label: "Saat",
+                    value: time,
+                    valueColor: Colors.cyanAccent,
+                  ),
+                  const SizedBox(height: 14),
+
+                  // Yer
+                  _buildDetailRow(
+                    icon: Icons.location_on_outlined,
+                    label: "Yer",
+                    value: location,
+                    valueColor: Colors.white,
+                  ),
+                  const SizedBox(height: 14),
+
+                  // Durum
+                  _buildDetailRow(
+                    icon: statusIcon,
+                    label: "Durum",
+                    value: status,
+                    valueColor: statusColor,
+                  ),
+
+                  // Bildirim zamanı (varsa)
+                  if (notifiedAtText.isNotEmpty) ...[
+                    const SizedBox(height: 14),
+                    _buildDetailRow(
+                      icon: Icons.notifications_active_outlined,
+                      label: "Bildirim Zamanı",
+                      value: notifiedAtText,
+                      valueColor: Colors.white70,
+                    ),
+                  ],
+
+                  const SizedBox(height: 24),
+
+                  // Kapat butonu
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.white.withValues(alpha: 0.15),
+                        elevation: 0,
+                        padding: const EdgeInsets.symmetric(vertical: 13),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(15),
+                          side: BorderSide(
+                            color: Colors.white.withValues(alpha: 0.2),
+                          ),
+                        ),
+                      ),
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text(
+                        "Kapat",
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // Detay satırı
+  Widget _buildDetailRow({
+    required IconData icon,
+    required String label,
+    required String value,
+    required Color valueColor,
+  }) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, color: Colors.white54, size: 20),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: const TextStyle(color: Colors.white54, fontSize: 12),
+              ),
+              const SizedBox(height: 3),
+              Text(
+                value,
+                style: TextStyle(
+                  color: valueColor,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  // YYYY-MM-DD → GG.AA.YYYY
+  String _formatDate(String raw) {
+    try {
+      final parts = raw.split('-');
+      if (parts.length == 3) {
+        return "${parts[2]}.${parts[1]}.${parts[0]}";
+      }
+    } catch (_) {}
+    return raw;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -28,7 +299,6 @@ class _MeetingCalendarScreenState extends State<MeetingCalendarScreen> {
       ),
       body: Stack(
         children: [
-          // 1. Ortak Derin Gradyan Arka Plan
           Container(
             decoration: const BoxDecoration(
               gradient: LinearGradient(
@@ -42,8 +312,6 @@ class _MeetingCalendarScreenState extends State<MeetingCalendarScreen> {
               ),
             ),
           ),
-
-          // 2. Neon Işıltılar (Turkuaz ve Mavi)
           Positioned(
             top: 50,
             right: -50,
@@ -60,20 +328,16 @@ class _MeetingCalendarScreenState extends State<MeetingCalendarScreen> {
               Colors.blueAccent.withValues(alpha: 0.1),
             ),
           ),
-
-          // 3. CANLI FİREBASE VERİSİ (StreamBuilder)
           SafeArea(
             child: StreamBuilder<QuerySnapshot>(
               stream: _firestore.collection('meetings').snapshots(),
               builder: (context, snapshot) {
-                // Yüklenme durumu
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(
                     child: CircularProgressIndicator(color: Colors.tealAccent),
                   );
                 }
 
-                // Hata durumu
                 if (snapshot.hasError) {
                   return const Center(
                     child: Text(
@@ -83,7 +347,6 @@ class _MeetingCalendarScreenState extends State<MeetingCalendarScreen> {
                   );
                 }
 
-                // Randevu yoksa gösterilecek boş ekran tasarımı
                 if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
                   return Center(
                     child: Column(
@@ -105,20 +368,16 @@ class _MeetingCalendarScreenState extends State<MeetingCalendarScreen> {
                   );
                 }
 
-                // Firebase'den gelen canlı randevu listesi
                 final meetings = snapshot.data!.docs;
 
                 return Column(
                   children: [
                     const SizedBox(height: 10),
-                    // Üst Bilgi Çubuğu (Artık dinamik sayı alıyor)
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 20.0),
                       child: _buildGlassInfoBar(meetings.length),
                     ),
                     const SizedBox(height: 15),
-
-                    // Toplantı Listesi
                     Expanded(
                       child: ListView.builder(
                         padding: const EdgeInsets.symmetric(
@@ -128,7 +387,6 @@ class _MeetingCalendarScreenState extends State<MeetingCalendarScreen> {
                         itemCount: meetings.length,
                         physics: const BouncingScrollPhysics(),
                         itemBuilder: (context, index) {
-                          // Firebase'den gelen her bir dokümanın verisini Map'e çeviriyoruz
                           var meetingData =
                               meetings[index].data() as Map<String, dynamic>;
                           return _buildMeetingGlassCard(meetingData);
@@ -145,9 +403,6 @@ class _MeetingCalendarScreenState extends State<MeetingCalendarScreen> {
     );
   }
 
-  // --- WIDGET'LAR (SENİN TASARIMIN) ---
-
-  // Parametre olarak toplantı sayısını (count) alacak şekilde güncellendi
   Widget _buildGlassInfoBar(int count) {
     return ClipRRect(
       borderRadius: BorderRadius.circular(20),
@@ -190,7 +445,6 @@ class _MeetingCalendarScreenState extends State<MeetingCalendarScreen> {
   }
 
   Widget _buildMeetingGlassCard(Map<String, dynamic> meeting) {
-    // Firebase'den gelen verilere null-safety (hata önleme) uygulandı
     bool isCritical = meeting["isCritical"] ?? false;
     String status = meeting["status"] ?? "Beklemede";
     String date = meeting["date"] ?? "Tarih Yok";
@@ -222,7 +476,7 @@ class _MeetingCalendarScreenState extends State<MeetingCalendarScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Üst Kısım: Tarih, Saat ve Aciliyet
+                // Tarih, Saat, Acil badge
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
@@ -271,7 +525,7 @@ class _MeetingCalendarScreenState extends State<MeetingCalendarScreen> {
                   child: Divider(color: Colors.white24, height: 1),
                 ),
 
-                // Orta Kısım: Kişi Bilgileri
+                // Öğrenci / Veli bilgisi
                 Row(
                   children: [
                     CircleAvatar(
@@ -314,7 +568,7 @@ class _MeetingCalendarScreenState extends State<MeetingCalendarScreen> {
 
                 const SizedBox(height: 15),
 
-                // Alt Kısım: Durum ve Aksiyon Butonu
+                // Durum + Görüşme Detayı butonu
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
@@ -327,19 +581,11 @@ class _MeetingCalendarScreenState extends State<MeetingCalendarScreen> {
                       ),
                     ),
 
-                    // Görüşmeyi Başlat / Detay Butonu
+                    // ✅ Artık SnackBar değil, glass popup açıyor
                     SizedBox(
                       height: 35,
                       child: ElevatedButton(
-                        onPressed: () {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(
-                                "$parentName ile görüşme notları sayfası açılacak.",
-                              ),
-                            ),
-                          );
-                        },
+                        onPressed: () => _showMeetingDetailPopup(meeting),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.white.withValues(alpha: 0.2),
                           elevation: 0,
@@ -363,9 +609,10 @@ class _MeetingCalendarScreenState extends State<MeetingCalendarScreen> {
     );
   }
 
+  // ✅ Düzeltildi: "Onaylandı" ve "Reddedildi" tam eşleşme
   Color _getStatusColor(String status) {
-    if (status.contains("Onayladı")) return Colors.greenAccent;
-    if (status.contains("Reddetti")) return Colors.redAccent;
+    if (status == 'Onaylandı') return Colors.greenAccent;
+    if (status == 'Reddedildi') return Colors.redAccent;
     return Colors.orangeAccent; // Beklemede
   }
 
