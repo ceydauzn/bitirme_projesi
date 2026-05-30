@@ -34,7 +34,7 @@ class _EmotionAnalysisScreenState extends State<EmotionAnalysisScreen> {
       ),
       body: Stack(
         children: [
-          // 1. Ortak Derin Gradyan Arka Plan
+          // Arka Plan
           Container(
             decoration: const BoxDecoration(
               gradient: LinearGradient(
@@ -49,7 +49,7 @@ class _EmotionAnalysisScreenState extends State<EmotionAnalysisScreen> {
             ),
           ),
 
-          // 2. Neon Işıltılar
+          // Neon Işıltılar
           Positioned(
             top: 100,
             right: -50,
@@ -73,13 +73,13 @@ class _EmotionAnalysisScreenState extends State<EmotionAnalysisScreen> {
                 left: 20.0,
                 right: 20.0,
                 top: 20.0,
-                bottom: 40.0, // Alt boşluk
+                bottom: 40.0,
               ),
               physics: const BouncingScrollPhysics(),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Üst Başlık ve Sınıf Seçimi
+                  // Üst Başlık
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
@@ -108,68 +108,166 @@ class _EmotionAnalysisScreenState extends State<EmotionAnalysisScreen> {
                   ),
                   const SizedBox(height: 25),
 
-                  // 3. Canlı Kamera Akışı Placeholder'ı
                   _buildLiveFeedPlaceholder(),
                   const SizedBox(height: 20),
 
-                  // 4. YENİ MODÜL: Sistem Durum Kartı
-                  _buildSystemStatusCard(),
-                  const SizedBox(height: 25),
+                  // 👇 İŞTE SİHİR BURADA BAŞLIYOR: TÜM SAYFAYI CANLI VERİYE BAĞLIYORUZ 👇
+                  StreamBuilder<QuerySnapshot>(
+                    stream: FirebaseFirestore.instance
+                        .collection('students')
+                        .where('branch', isEqualTo: _selectedClass)
+                        .snapshots(),
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return const Center(
+                          child: Padding(
+                            padding: EdgeInsets.all(40),
+                            child: CircularProgressIndicator(
+                              color: Colors.cyanAccent,
+                            ),
+                          ),
+                        );
+                      }
+                      if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                        return const Center(
+                          child: Padding(
+                            padding: EdgeInsets.all(40),
+                            child: Text(
+                              "Sınıf verisi bulunamadı.",
+                              style: TextStyle(color: Colors.white),
+                            ),
+                          ),
+                        );
+                      }
 
-                  // 5. Anlık Duygu Dağılımı (Mevcut Firebase Bağlantılı Modül)
-                  const Text(
-                    "Anlık Sınıf Duygu Dağılımı",
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
+                      var docs = snapshot.data!.docs;
+                      int totalStudents = docs.length;
+
+                      // Sayaçlar ve Kritik Liste
+                      Map<String, int> emotionCounts = {
+                        "Odaklanmış": 0,
+                        "Mutlu / Rahat": 0,
+                        "Nötr": 0,
+                        "Stresli / Kaygılı": 0,
+                        "Uykulu / Sıkılmış": 0,
+                      };
+                      List<Map<String, dynamic>> criticalStudents = [];
+
+                      // Firebase verilerini tek tek işliyoruz
+                      for (var doc in docs) {
+                        var data = doc.data() as Map<String, dynamic>;
+                        String status = data['currentStatus'] ?? "Nötr";
+                        String studentName =
+                            data['name'] ??
+                            "Öğrenci"; // İsmi veritabanından çekiyor
+
+                        if (status.contains("Mutlu")) {
+                          emotionCounts["Mutlu / Rahat"] =
+                              emotionCounts["Mutlu / Rahat"]! + 1;
+                        } else if (status.contains("Odakli") ||
+                            status.contains("Odaklanmış")) {
+                          emotionCounts["Odaklanmış"] =
+                              emotionCounts["Odaklanmış"]! + 1;
+                        } else if (status.contains("Stres") ||
+                            status.contains("Kizgin") ||
+                            status.contains("Üzgün")) {
+                          emotionCounts["Stresli / Kaygılı"] =
+                              emotionCounts["Stresli / Kaygılı"]! + 1;
+                          // Stresli olanları otomatik kritik listeye alıyoruz
+                          criticalStudents.add({
+                            "name": studentName,
+                            "issue":
+                                "Son dakikalarda yüksek stres ve kaygı belirtisi tespit edildi.",
+                            "color": Colors.orangeAccent,
+                            "icon": Icons.psychology_alt,
+                          });
+                        } else if (status.contains("Uykulu") ||
+                            status.contains("Sıkılmış")) {
+                          emotionCounts["Uykulu / Sıkılmış"] =
+                              emotionCounts["Uykulu / Sıkılmış"]! + 1;
+                          // Uykulu olanları otomatik kritik listeye alıyoruz
+                          criticalStudents.add({
+                            "name": studentName,
+                            "issue":
+                                "Derste odaklanma sorunu ve enerji düşüklüğü yaşıyor.",
+                            "color": Colors.redAccent,
+                            "icon": Icons.snooze,
+                          });
+                        } else {
+                          emotionCounts["Nötr"] = emotionCounts["Nötr"]! + 1;
+                        }
+                      }
+
+                      // Dinamik Verileri Modüllere Dağıtıyoruz
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // CANLI: Öğrenci sayısı otomatik hesaplanıyor
+                          _buildSystemStatusCard(totalStudents),
+                          const SizedBox(height: 25),
+
+                          const Text(
+                            "Anlık Sınıf Duygu Dağılımı",
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
+                          const SizedBox(height: 15),
+                          // CANLI: Duygu dağılımı grafiği
+                          _buildDynamicEmotionChart(
+                            emotionCounts,
+                            totalStudents,
+                          ),
+                          const SizedBox(height: 25),
+
+                          const Row(
+                            children: [
+                              Icon(
+                                Icons.warning_amber_rounded,
+                                color: Colors.orangeAccent,
+                              ),
+                              SizedBox(width: 8),
+                              Text(
+                                "Kritik Durum Uyarıları",
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 15),
+                          // CANLI: Firebase'de uykulu/stresli kimse varsa onu listeler, yoksa "Her şey yolunda" der
+                          _buildCriticalAlerts(criticalStudents),
+                          const SizedBox(height: 25),
+
+                          const Row(
+                            children: [
+                              Icon(
+                                Icons.lightbulb_outline,
+                                color: Colors.amberAccent,
+                              ),
+                              SizedBox(width: 8),
+                              Text(
+                                "YZ Sınıf İçi Aksiyon Önerisi",
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 15),
+                          // CANLI: Çoğunluğun duygusuna göre dinamik metin üretir
+                          _buildAIRecommendation(emotionCounts, totalStudents),
+                        ],
+                      );
+                    },
                   ),
-                  const SizedBox(height: 15),
-                  _buildDynamicEmotionChart(),
-
-                  const SizedBox(height: 25),
-
-                  // 6. YENİ MODÜL: Kritik Durum Uyarıları
-                  const Row(
-                    children: [
-                      Icon(
-                        Icons.warning_amber_rounded,
-                        color: Colors.orangeAccent,
-                      ),
-                      SizedBox(width: 8),
-                      Text(
-                        "Kritik Durum Uyarıları",
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 15),
-                  _buildCriticalAlerts(),
-
-                  const SizedBox(height: 25),
-
-                  // 7. YENİ MODÜL: YZ Asistan Önerisi
-                  const Row(
-                    children: [
-                      Icon(Icons.lightbulb_outline, color: Colors.amberAccent),
-                      SizedBox(width: 8),
-                      Text(
-                        "YZ Sınıf İçi Aksiyon Önerisi",
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 15),
-                  _buildAIRecommendation(),
                 ],
               ),
             ),
@@ -179,7 +277,327 @@ class _EmotionAnalysisScreenState extends State<EmotionAnalysisScreen> {
     );
   }
 
-  // --- WIDGET'LAR ---
+  // --- CANLI MODÜLLER ---
+
+  Widget _buildSystemStatusCard(int studentCount) {
+    return _buildGlassCard(
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        children: [
+          _buildStatusItem(
+            Icons.videocam,
+            "Kamera",
+            "Aktif",
+            Colors.greenAccent,
+          ),
+          Container(width: 1, height: 40, color: Colors.white24),
+          _buildStatusItem(
+            Icons.speed,
+            "Analiz Hızı",
+            "0.8 sn",
+            Colors.cyanAccent,
+          ),
+          Container(width: 1, height: 40, color: Colors.white24),
+          _buildStatusItem(
+            Icons.group,
+            "Öğrenci",
+            "$studentCount Kişi",
+            Colors.orangeAccent,
+          ), // CANLI VERİ
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCriticalAlerts(List<Map<String, dynamic>> criticalStudents) {
+    if (criticalStudents.isEmpty) {
+      return _buildGlassCard(
+        child: const Row(
+          children: [
+            Icon(
+              Icons.check_circle_outline,
+              color: Colors.greenAccent,
+              size: 30,
+            ),
+            SizedBox(width: 15),
+            Expanded(
+              child: Text(
+                "Harika! Şu an sınıfta müdahale gerektiren stresli veya uykulu bir öğrenci bulunmuyor.",
+                style: TextStyle(color: Colors.white70, fontSize: 14),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Column(
+      children: criticalStudents.map((student) {
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 10),
+          child: _buildAlertTile(
+            name: student['name'],
+            issue: student['issue'],
+            color: student['color'],
+            icon: student['icon'],
+          ),
+        );
+      }).toList(),
+    );
+  }
+
+  Widget _buildAIRecommendation(
+    Map<String, int> emotionCounts,
+    int totalStudents,
+  ) {
+    String recommendation = "";
+    Color themeColor = Colors.amberAccent;
+
+    // En baskın duyguyu bulma mantığı
+    int maxCount = 0;
+    String dominantEmotion = "Nötr";
+    emotionCounts.forEach((key, value) {
+      if (value > maxCount) {
+        maxCount = value;
+        dominantEmotion = key;
+      }
+    });
+
+    double domPercentage = totalStudents > 0
+        ? (maxCount / totalStudents) * 100
+        : 0;
+
+    if (dominantEmotion == "Odaklanmış" || dominantEmotion == "Mutlu / Rahat") {
+      recommendation =
+          "Sınıfın %${domPercentage.toInt()}'i oldukça pozitif ve derse odaklı durumda. Öğrenme verimliliği zirvede, yeni ve zor konuları anlatmak için harika bir an!";
+      themeColor = Colors.greenAccent;
+    } else if (dominantEmotion == "Stresli / Kaygılı") {
+      recommendation =
+          "Sınıfta kaygı seviyesi çok yüksek (%${domPercentage.toInt()}). Öğrenciler konuyu anlamakta zorlanıyor olabilir. Kısa bir soru-cevap veya mola yapılması şiddetle önerilir.";
+      themeColor = Colors.orangeAccent;
+    } else if (dominantEmotion == "Uykulu / Sıkılmış") {
+      recommendation =
+          "Sınıfın genelinde enerji düşüklüğü tespit edildi (%${domPercentage.toInt()}). Sesi yükseltmek veya tahtada interaktif bir etkinlik yapmak dikkatleri toplayacaktır.";
+      themeColor = Colors.redAccent;
+    } else {
+      recommendation =
+          "Sınıf şu an stabil ve sakin bir durumda. Rutin ders akışına devam edebilirsiniz.";
+      themeColor = Colors.blueAccent;
+    }
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: themeColor.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: themeColor.withValues(alpha: 0.3),
+          width: 1.5,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: themeColor.withValues(alpha: 0.05),
+            blurRadius: 10,
+            spreadRadius: 2,
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.auto_awesome, color: themeColor, size: 20),
+              const SizedBox(width: 8),
+              Text(
+                "Sistem Analizi",
+                style: TextStyle(
+                  color: themeColor,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(
+            recommendation,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 14,
+              height: 1.4,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDynamicEmotionChart(
+    Map<String, int> emotionCounts,
+    int totalStudents,
+  ) {
+    return _buildGlassCard(
+      child: Column(
+        children: emotionCounts.entries.map((entry) {
+          Color color = _getEmotionColor(entry.key);
+          double percentage = totalStudents > 0
+              ? entry.value / totalStudents
+              : 0.0;
+
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 15.0),
+            child: Row(
+              children: [
+                SizedBox(
+                  width: 120,
+                  child: Text(
+                    entry.key,
+                    style: const TextStyle(color: Colors.white, fontSize: 14),
+                  ),
+                ),
+                Expanded(
+                  child: Stack(
+                    children: [
+                      Container(
+                        height: 10,
+                        decoration: BoxDecoration(
+                          color: Colors.white10,
+                          borderRadius: BorderRadius.circular(5),
+                        ),
+                      ),
+                      AnimatedFractionallySizedBox(
+                        duration: const Duration(milliseconds: 800),
+                        curve: Curves.fastOutSlowIn,
+                        widthFactor: percentage,
+                        child: Container(
+                          height: 10,
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [color.withValues(alpha: 0.7), color],
+                            ),
+                            borderRadius: BorderRadius.circular(5),
+                            boxShadow: [
+                              BoxShadow(
+                                color: color.withValues(alpha: 0.3),
+                                blurRadius: 5,
+                                spreadRadius: 1,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 15),
+                SizedBox(
+                  width: 40,
+                  child: Text(
+                    "%${(percentage * 100).toInt()}",
+                    style: TextStyle(
+                      color: color,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
+  // --- YARDIMCI WIDGET'LAR ---
+
+  Widget _buildAlertTile({
+    required String name,
+    required String issue,
+    required Color color,
+    required IconData icon,
+  }) {
+    return _buildGlassCard(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.15),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, color: color, size: 24),
+          ),
+          const SizedBox(width: 15),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  name,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 15,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  issue,
+                  style: const TextStyle(
+                    color: Colors.white70,
+                    fontSize: 13,
+                    height: 1.3,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: Text(
+                    "Rehberlik Yönlendirmesi Önerilir",
+                    style: TextStyle(
+                      color: color,
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatusItem(
+    IconData icon,
+    String title,
+    String value,
+    Color color,
+  ) {
+    return Column(
+      children: [
+        Icon(icon, color: color, size: 24),
+        const SizedBox(height: 4),
+        Text(
+          title,
+          style: const TextStyle(color: Colors.white54, fontSize: 11),
+        ),
+        Text(
+          value,
+          style: const TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+            fontSize: 14,
+          ),
+        ),
+      ],
+    );
+  }
 
   Widget _buildClassSelector() {
     return Container(
@@ -252,328 +670,6 @@ class _EmotionAnalysisScreenState extends State<EmotionAnalysisScreen> {
           ],
         ),
       ),
-    );
-  }
-
-  // YENİ EKLENEN MODÜL 1: Sistem Durum Kartı
-  Widget _buildSystemStatusCard() {
-    return _buildGlassCard(
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: [
-          _buildStatusItem(
-            Icons.videocam,
-            "Kamera",
-            "Aktif",
-            Colors.greenAccent,
-          ),
-          Container(width: 1, height: 40, color: Colors.white24),
-          _buildStatusItem(
-            Icons.speed,
-            "Analiz Hızı",
-            "0.8 sn",
-            Colors.cyanAccent,
-          ),
-          Container(width: 1, height: 40, color: Colors.white24),
-          _buildStatusItem(
-            Icons.group,
-            "Öğrenci",
-            "18/20",
-            Colors.orangeAccent,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildStatusItem(
-    IconData icon,
-    String title,
-    String value,
-    Color color,
-  ) {
-    return Column(
-      children: [
-        Icon(icon, color: color, size: 24),
-        const SizedBox(height: 4),
-        Text(
-          title,
-          style: const TextStyle(color: Colors.white54, fontSize: 11),
-        ),
-        Text(
-          value,
-          style: const TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-            fontSize: 14,
-          ),
-        ),
-      ],
-    );
-  }
-
-  // YENİ EKLENEN MODÜL 2: Kritik Durum Uyarıları
-  Widget _buildCriticalAlerts() {
-    return Column(
-      children: [
-        _buildAlertTile(
-          name: "Ahmet Yılmaz",
-          issue:
-              "Son 15 dakikadır sürekli stres ve kaygı belirtisi gösteriyor.",
-          color: Colors.orangeAccent,
-          icon: Icons.psychology_alt,
-        ),
-        const SizedBox(height: 10),
-        _buildAlertTile(
-          name: "Zeynep Kaya",
-          issue: "Ders başından beri odaklanma sorunu ve yorgunluk.",
-          color: Colors.redAccent,
-          icon: Icons.snooze,
-        ),
-      ],
-    );
-  }
-
-  Widget _buildAlertTile({
-    required String name,
-    required String issue,
-    required Color color,
-    required IconData icon,
-  }) {
-    return _buildGlassCard(
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.15),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(icon, color: color, size: 24),
-          ),
-          const SizedBox(width: 15),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  name,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 15,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  issue,
-                  style: const TextStyle(
-                    color: Colors.white70,
-                    fontSize: 13,
-                    height: 1.3,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: Text(
-                    "Rehberlik Yönlendirmesi Önerilir",
-                    style: TextStyle(
-                      color: color,
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // YENİ EKLENEN MODÜL 3: YZ Aksiyon Önerisi
-  Widget _buildAIRecommendation() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.blueAccent.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: Colors.blueAccent.withValues(alpha: 0.3),
-          width: 1.5,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.blueAccent.withValues(alpha: 0.05),
-            blurRadius: 10,
-            spreadRadius: 2,
-          ),
-        ],
-      ),
-      child: const Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(Icons.auto_awesome, color: Colors.amberAccent, size: 20),
-              SizedBox(width: 8),
-              Text(
-                "Sistem Analizi",
-                style: TextStyle(
-                  color: Colors.amberAccent,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 14,
-                ),
-              ),
-            ],
-          ),
-          SizedBox(height: 10),
-          Text(
-            "Sınıfın %60'ı odaklanmış durumda ancak arka sıralarda genel bir enerji düşüklüğü tespit edildi. Dikkatleri tazelemek için kısa bir soru-cevap etkinliğine geçilmesi önerilir.",
-            style: TextStyle(color: Colors.white, fontSize: 14, height: 1.4),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDynamicEmotionChart() {
-    return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('students')
-          .where('branch', isEqualTo: _selectedClass)
-          .snapshots(),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return _buildGlassCard(
-            height: 200,
-            child: const Center(
-              child: CircularProgressIndicator(color: Colors.cyanAccent),
-            ),
-          );
-        }
-
-        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-          return _buildGlassCard(
-            height: 200,
-            child: const Center(
-              child: Text(
-                "Sınıf verisi bulunamadı.",
-                style: TextStyle(color: Colors.white),
-              ),
-            ),
-          );
-        }
-
-        int totalStudents = snapshot.data!.docs.length;
-        Map<String, int> emotionCounts = {
-          "Odaklanmış": 0,
-          "Mutlu / Rahat": 0,
-          "Nötr": 0,
-          "Stresli / Kaygılı": 0,
-          "Uykulu / Sıkılmış": 0,
-        };
-
-        for (var doc in snapshot.data!.docs) {
-          var data = doc.data() as Map<String, dynamic>;
-          String status = data['currentStatus'] ?? "Nötr";
-
-          if (status.contains("Mutlu")) {
-            emotionCounts["Mutlu / Rahat"] =
-                (emotionCounts["Mutlu / Rahat"] ?? 0) + 1;
-          } else if (status.contains("Stres")) {
-            emotionCounts["Stresli / Kaygılı"] =
-                (emotionCounts["Stresli / Kaygılı"] ?? 0) + 1;
-          } else if (status.contains("Kizgin") || status.contains("Üzgün")) {
-            emotionCounts["Stresli / Kaygılı"] =
-                (emotionCounts["Stresli / Kaygılı"] ?? 0) + 1;
-          } else if (status.contains("Odakli")) {
-            emotionCounts["Odaklanmış"] =
-                (emotionCounts["Odaklanmış"] ?? 0) + 1;
-          } else {
-            emotionCounts["Nötr"] = (emotionCounts["Nötr"] ?? 0) + 1;
-          }
-        }
-
-        return _buildGlassCard(
-          child: Column(
-            children: emotionCounts.entries.map((entry) {
-              Color color = _getEmotionColor(entry.key);
-              double percentage = totalStudents > 0
-                  ? entry.value / totalStudents
-                  : 0.0;
-
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 15.0),
-                child: Row(
-                  children: [
-                    SizedBox(
-                      width: 120,
-                      child: Text(
-                        entry.key,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 14,
-                        ),
-                      ),
-                    ),
-                    Expanded(
-                      child: Stack(
-                        children: [
-                          Container(
-                            height: 10,
-                            decoration: BoxDecoration(
-                              color: Colors.white10,
-                              borderRadius: BorderRadius.circular(5),
-                            ),
-                          ),
-                          AnimatedFractionallySizedBox(
-                            duration: const Duration(milliseconds: 800),
-                            curve: Curves.fastOutSlowIn,
-                            widthFactor: percentage,
-                            child: Container(
-                              height: 10,
-                              decoration: BoxDecoration(
-                                gradient: LinearGradient(
-                                  colors: [color.withValues(alpha: 0.7), color],
-                                ),
-                                borderRadius: BorderRadius.circular(5),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: color.withValues(alpha: 0.3),
-                                    blurRadius: 5,
-                                    spreadRadius: 1,
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 15),
-                    SizedBox(
-                      width: 40,
-                      child: Text(
-                        "%${(percentage * 100).toInt()}",
-                        style: TextStyle(
-                          color: color,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 14,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            }).toList(),
-          ),
-        );
-      },
     );
   }
 

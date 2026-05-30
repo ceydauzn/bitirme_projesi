@@ -308,12 +308,21 @@ class _TeacherPanelState extends State<TeacherPanel> {
           borderRadius: BorderRadius.circular(25),
           onTap: () {
             if (title.contains("Duygu")) {
+              // 👇 HATALI KABLO BURADA ONARILDI: gmail.com olarak güncellendi 👇
+              String currentUserEmail =
+                  FirebaseAuth.instance.currentUser?.email ?? "";
+              String targetClass = (currentUserEmail == "rehberlik2@gmail.com")
+                  ? "12-B"
+                  : "12-A";
+
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (context) => const EmotionAnalysisScreen(),
+                  builder: (context) =>
+                      EmotionAnalysisScreen(assignedClass: targetClass),
                 ),
               );
+              // 👆 BİTİŞ 👆
             } else if (title.contains("Öğrenci")) {
               Navigator.push(
                 context,
